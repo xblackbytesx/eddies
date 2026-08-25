@@ -10,17 +10,27 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.StarBorder
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Icon
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.eddies.app.core.design.ChartMath
+import com.eddies.app.core.design.ChartRange
+import com.eddies.app.core.design.InteractiveLineChart
 import com.eddies.app.core.ui.AssetIcon
 import com.eddies.app.core.ui.EmptyHint
 import com.eddies.app.core.ui.PnlText
@@ -43,6 +53,7 @@ fun AssetDetailScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val holding = state.holding
+    val zone = remember { ZoneId.systemDefault() }
 
     Column(
         modifier = modifier.fillMaxWidth().verticalScroll(rememberScrollState())
@@ -50,7 +61,9 @@ fun AssetDetailScreen(
         verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
         if (holding == null) {
-            EmptyHint("No position in this asset yet.")
+            // A watched coin has no position, and Markets links straight here,
+            // so this cannot be a dead end.
+            EmptyHint("No position in this coin yet. Add one with the + button on Portfolio.")
             return@Column
         }
 
@@ -61,7 +74,9 @@ fun AssetDetailScreen(
                 Text(holding.asset.name, style = MaterialTheme.typography.titleLarge)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        holding.price?.let { MoneyFormat.price(it.price, state.currency) } ?: "No price",
+                        state.scrubbed?.let { MoneyFormat.price(BigDecimal.valueOf(it.value), state.currency) }
+                            ?: holding.price?.let { MoneyFormat.price(it.price, state.currency) }
+                            ?: "No price",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -71,13 +86,57 @@ fun AssetDetailScreen(
                     }
                 }
             }
-            holding.price?.changePct24h?.let { pct ->
-                PnlText(
-                    text = MoneyFormat.percent(pct, state.hidden),
-                    value = BigDecimal.valueOf(pct),
-                    style = MaterialTheme.typography.titleMedium,
+            IconButton(onClick = viewModel::toggleWatch) {
+                Icon(
+                    imageVector = if (state.watched) Icons.Default.Star else Icons.Default.StarBorder,
+                    contentDescription = if (state.watched) "Stop watching" else "Watch this coin",
+                    tint = if (state.watched) MaterialTheme.colorScheme.tertiary
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+
+            // Over the charted window when there is a chart, otherwise 24h.
+            val shownPct = state.rangeChangePct ?: holding.price?.changePct24h
+            shownPct?.let { pct ->
+                Column(horizontalAlignment = Alignment.End) {
+                    PnlText(
+                        text = MoneyFormat.percent(pct, state.hidden),
+                        value = BigDecimal.valueOf(pct),
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                    Text(
+                        if (state.rangeChangePct != null) state.range.label else "24h",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+
+        // The chart, drawn from cached candles. A coin with no history yet
+        // simply has no chart rather than an empty frame promising one.
+        if (state.history.size >= 2) {
+            InteractiveLineChart(
+                points = state.history,
+                height = 190.dp,
+                formatValue = { MoneyFormat.price(BigDecimal.valueOf(it), state.currency) },
+                formatTs = { ChartMath.formatScrubTs(it, zone, state.range) },
+                onScrub = viewModel::onScrub,
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                ChartRange.entries.forEach { r ->
+                    FilterChip(
+                        selected = r == state.range,
+                        onClick = { viewModel.setRange(r) },
+                        label = { Text(r.label, style = MaterialTheme.typography.labelMedium) },
+                    )
+                }
+            }
+        } else if (state.loadingHistory) {
+            LinearProgressIndicator(Modifier.fillMaxWidth())
         }
 
         Section("Your position") {

@@ -94,10 +94,25 @@ class AssetResolver(refs: List<AssetSourceRef>) {
  */
 object KrakenSymbols {
     private val legacyToMarket = mapOf("XBT" to "BTC", "XDG" to "DOGE")
+    private val marketToLegacy = legacyToMarket.entries.associate { (k, v) -> v to k }
 
     /** The v2 WebSocket symbol for a pair, from market-symbol base and quote. */
     fun v2Symbol(base: String, quote: String): String =
         "${base.uppercase()}/${quote.uppercase()}"
+
+    /**
+     * The REST v1 altname for a pair, which is what /0/public/OHLC wants:
+     * "XBTEUR", not the socket's "BTC/EUR". Sending the socket spelling here
+     * returns "Unknown asset pair" and the chart silently stays empty.
+     */
+    fun restPair(base: String, quote: String): String =
+        "${toLegacySymbol(base)}${quote.uppercase()}"
+
+    /** Market symbol to Kraken's own: BTC to XBT, DOGE to XDG, everything else unchanged. */
+    fun toLegacySymbol(marketSymbol: String): String {
+        val upper = marketSymbol.uppercase()
+        return marketToLegacy[upper] ?: upper
+    }
 
     /**
      * Normalises an asset code from a REST v1 response into the market symbol

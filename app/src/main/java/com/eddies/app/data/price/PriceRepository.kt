@@ -4,7 +4,7 @@ import com.eddies.app.data.db.dao.AssetDao
 import com.eddies.app.data.db.dao.PriceDao
 import com.eddies.app.data.db.dao.TransactionDao
 import com.eddies.app.data.db.dao.WatchlistDao
-import com.eddies.app.data.db.entity.PriceSnapshotEntity
+import com.eddies.app.data.db.entity.PriceLatestEntity
 import com.eddies.app.data.prefs.RealtimeFeed
 import com.eddies.app.data.prefs.SettingsDataStore
 import com.eddies.app.domain.PriceSourceId
@@ -90,7 +90,7 @@ class PriceRepository @Inject constructor(
 
         // Seed from the last stored snapshot so a cold start shows numbers
         // immediately, flagged stale until something live replaces them.
-        priceDao.latestPerAsset()
+        priceDao.allLatest()
             .filter { it.assetId in assetIds }
             .forEach { row ->
                 runCatching { BigDecimal(row.price) }.getOrNull()?.let { price ->
@@ -148,10 +148,18 @@ class PriceRepository @Inject constructor(
         awaitClose { }
     }
 
+    /**
+     * Records the latest price as a single upserted row per asset.
+     *
+     * Deliberately not append-only. Kraken's ticker fires on every trade, so an
+     * insert per tick is tens of thousands of rows a day for one liquid pair,
+     * plus a database write per tick on a phone. Chart series live in
+     * price_candles and are written by PriceHistoryRepository instead.
+     */
     private suspend fun persist(tick: PriceTick) {
-        priceDao.upsert(
+        priceDao.upsertLatest(
             listOf(
-                PriceSnapshotEntity(
+                PriceLatestEntity(
                     assetId = tick.assetId,
                     timestamp = tick.at,
                     price = tick.price.toPlainString(),
@@ -162,8 +170,13 @@ class PriceRepository @Inject constructor(
         )
     }
 
-    /** Drops snapshots older than the retention window, called from the daily worker. */
-    suspend fun prune(retentionDays: Int = 400) {
-        priceDao.prune(System.currentTimeMillis() - retentionDays * 24L * 60 * 60 * 1000)
+    /**
+     * Drops hourly candles past the retention window, called from the daily
+     * worker. Daily candles are the long-term series and are never pruned: they
+     * are what the 1Y and All ranges draw, and refetching them costs a request
+     * per asset.
+     */
+    suspend fun prune(hourlyRetentionDays: Int = 60) {
+        priceDao.pruneHourly(System.currentTimeMillis() - hourlyRetentionDays * 24L * 60 * 60 * 1000)
     }
 }

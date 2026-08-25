@@ -81,6 +81,10 @@ android {
         compilerOptions { jvmTarget.set(JvmTarget.JVM_21) }
     }
 
+    ksp {
+        arg("room.schemaLocation", "$projectDir/schemas")
+    }
+
     buildFeatures {
         compose = true
         buildConfig = true

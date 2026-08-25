@@ -11,6 +11,7 @@ import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.eddies.app.data.price.FxRepository
 import com.eddies.app.data.price.PriceRepository
+import com.eddies.app.data.repo.PortfolioBackfill
 import com.eddies.app.data.repo.PortfolioRepository
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
@@ -35,6 +36,7 @@ class DailyWorker @AssistedInject constructor(
     private val portfolio: PortfolioRepository,
     private val prices: PriceRepository,
     private val fx: FxRepository,
+    private val backfill: PortfolioBackfill,
 ) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
@@ -47,6 +49,10 @@ class DailyWorker @AssistedInject constructor(
             if (summary.holdings.isNotEmpty()) {
                 portfolio.snapshotToday(summary)
             }
+
+            // Cheap after the first run: history is cached, so this is a delta
+            // per asset and a replay over data already on disk.
+            runCatching { backfill.run() }
 
             prices.prune()
             Result.success()

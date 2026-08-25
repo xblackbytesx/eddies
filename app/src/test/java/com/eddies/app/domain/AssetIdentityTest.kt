@@ -85,6 +85,29 @@ class AssetIdentityTest {
     }
 
     @Test
+    fun `the REST OHLC endpoint takes the legacy spelling, not the socket one`() {
+        // Verified 2026-08-25: /0/public/OHLC wants XBTEUR and answers with the
+        // key XXBTZEUR. Sending the v2 socket's BTC/EUR returns "Unknown asset
+        // pair" and the chart silently stays empty. Same trap as wsname, other
+        // direction, which is why both mappings exist.
+        assertEquals("XBTEUR", KrakenSymbols.restPair("BTC", "EUR"))
+        assertEquals("XBTUSD", KrakenSymbols.restPair("BTC", "USD"))
+        assertEquals("XDGEUR", KrakenSymbols.restPair("DOGE", "EUR"))
+        assertEquals("ADAEUR", KrakenSymbols.restPair("ADA", "EUR"))
+    }
+
+    @Test
+    fun `the socket and REST spellings round trip against each other`() {
+        // BTC -> XBT -> BTC. If these ever disagree, one of the two endpoints
+        // stops resolving and nothing in the UI says which.
+        val market = "BTC"
+        val legacy = KrakenSymbols.toLegacySymbol(market)
+        assertEquals("XBT", legacy)
+        assertEquals(market, KrakenSymbols.toMarketSymbol(legacy))
+        assertEquals("BTC/EUR", KrakenSymbols.v2Symbol(market, "EUR"))
+    }
+
+    @Test
     fun `stripping the legacy prefix must not eat a real three-letter ticker`() {
         // XRP and ZEC both start with a class-prefix letter. Stripping
         // unconditionally turns them into RP and EC, which are different assets

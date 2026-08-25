@@ -6,6 +6,7 @@ import com.eddies.app.core.design.ChartPoint
 import com.eddies.app.core.design.ChartRange
 import com.eddies.app.core.ui.IconResolver
 import com.eddies.app.data.prefs.SettingsDataStore
+import com.eddies.app.data.repo.PortfolioBackfill
 import com.eddies.app.data.repo.PortfolioRepository
 import com.eddies.app.domain.Holding
 import com.eddies.app.domain.PortfolioSummary
@@ -38,6 +39,7 @@ data class PortfolioUiState(
 class PortfolioViewModel @Inject constructor(
     private val portfolio: PortfolioRepository,
     private val settings: SettingsDataStore,
+    private val backfill: PortfolioBackfill,
     val icons: IconResolver,
 ) : ViewModel() {
 
@@ -65,6 +67,25 @@ class PortfolioViewModel @Inject constructor(
             scrubbed = scrub,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), PortfolioUiState())
+
+    private var backfillTried = false
+
+    /**
+     * Runs once per process when there are holdings but no history yet.
+     *
+     * Without this a fresh install shows an empty chart until WorkManager gets
+     * around to the first daily run, which is exactly when someone is most
+     * likely to be looking at it.
+     */
+    fun backfillIfEmpty() {
+        if (backfillTried) return
+        backfillTried = true
+        viewModelScope.launch {
+            val s = state.value
+            if (s.summary.holdings.isEmpty() || s.history.size >= 2) return@launch
+            runCatching { backfill.run() }
+        }
+    }
 
     fun setRange(r: ChartRange) { range.value = r }
 

@@ -81,6 +81,19 @@ class FxRepository @Inject constructor(
         return runCatching { BigDecimal(row.rate) }.getOrNull()
     }
 
+    /** A single current rate, for converting a fetched candle series. */
+    suspend fun converter1(from: String, to: String): java.math.BigDecimal? {
+        if (from.equals(to, ignoreCase = true)) return java.math.BigDecimal.ONE
+        val rows = fxDao.all()
+        if (rows.isEmpty()) return null
+        val latestDay = rows.maxOfOrNull { it.day } ?: return null
+        val table = FiatConverter(
+            rows.filter { it.day == latestDay }.associate { it.quote to java.math.BigDecimal(it.rate) },
+            pivot = PIVOT,
+        )
+        return table.rate(from.uppercase(), to.uppercase())
+    }
+
     /** Fetches today's rates if the cache is older than a day. Safe to call often. */
     suspend fun refreshIfStale(force: Boolean = false) {
         val last = settings.lastFxFetch()
