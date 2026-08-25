@@ -1,0 +1,55 @@
+name: eddies
+
+services:
+  build:
+    image: eddies-build
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    volumes:
+      - ..:/workspace
+      - gradle-cache:/opt/gradle-home
+    command: bash docker/run-gradle.sh :app:assembleDebug
+
+  build-release:
+    image: eddies-build
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    volumes:
+      - ..:/workspace
+      - gradle-cache:/opt/gradle-home
+    command: bash docker/run-gradle.sh :app:assembleRelease
+
+  test:
+    image: eddies-build
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    volumes:
+      - ..:/workspace
+      - gradle-cache:/opt/gradle-home
+    command: bash docker/run-gradle.sh :app:testDebugUnitTest
+
+  lint:
+    image: eddies-build
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    volumes:
+      - ..:/workspace
+      - gradle-cache:/opt/gradle-home
+    command: bash docker/run-gradle.sh :app:lintDebug
+
+  shell:
+    image: eddies-build
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    volumes:
+      - ..:/workspace
+      - gradle-cache:/opt/gradle-home
+    entrypoint: ["bash"]
+
+volumes:
+  gradle-cache:

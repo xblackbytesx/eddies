@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Compose drives every in-app colour. This platform theme only styles the initial
+  window (splash background, no action bar) and makes the system bars transparent
+  so enableEdgeToEdge can take over.
+
+  Parent is a platform style, not AppCompat: there is no Theme.Material.DayNight.*
+  platform style, and this app does not depend on AppCompat or the Material
+  Components XML themes.
+-->
+<resources>
+    <style name="Theme.Eddies" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/splash_background</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+
+    <style name="Theme.Eddies.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/splash_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_splash_logo</item>
+        <item name="postSplashScreenTheme">@style/Theme.Eddies</item>
+    </style>
+</resources>

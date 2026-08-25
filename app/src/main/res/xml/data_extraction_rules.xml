@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Nothing leaves the device through a system backup. The database key lives in
+  the Android Keystore and cannot be restored onto other hardware, so a restored
+  backup would be an app that looks set up and cannot open its own ledger.
+  Portable backups are the encrypted file the user writes deliberately.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="root" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="root" />
+    </device-transfer>
+</data-extraction-rules>
