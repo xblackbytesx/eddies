@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Matches EddiesDarkColors.background. The app opens dark by default, so
+         the splash does too and there is no white flash on a cold start. -->
+    <color name="splash_background">#0B0E11</color>
+</resources>

@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+    tags-ignore: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      # Keep these in lockstep with docker/Dockerfile. A CI run against different
+      # tooling than `make test` is not testing the thing that ships. The runner
+      # image ships its own SDK at /usr/local/lib/android/sdk; we ignore it for
+      # exactly that reason.
+      CMDLINE_TOOLS_VERSION: "11076708"
+      ANDROID_PLATFORM: android-36
+      BUILD_TOOLS_VERSION: "36.0.0"
+      GRADLE_VERSION: "8.13"
+      ANDROID_HOME: /opt/android-sdk
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Cache SDK + Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            /opt/android-sdk
+            /opt/gradle
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: android-${{ runner.os }}-${{ hashFiles('gradle/libs.versions.toml', 'app/build.gradle.kts') }}
+
+      - name: Install Android SDK + Gradle
+        run: |
+          if [ ! -d "$ANDROID_HOME/cmdline-tools/latest" ]; then
+            sudo mkdir -p "$ANDROID_HOME/cmdline-tools" && sudo chown -R "$USER" "$ANDROID_HOME"
+            curl -sL "https://dl.google.com/android/repository/commandlinetools-linux-${CMDLINE_TOOLS_VERSION}_latest.zip" -o /tmp/ct.zip
+            unzip -q /tmp/ct.zip -d "$ANDROID_HOME/cmdline-tools"
+            mv "$ANDROID_HOME/cmdline-tools/cmdline-tools" "$ANDROID_HOME/cmdline-tools/latest"
+            yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null
+            "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platform-tools" "platforms;${ANDROID_PLATFORM}" "build-tools;${BUILD_TOOLS_VERSION}"
+          fi
+          if [ ! -d "/opt/gradle/gradle-${GRADLE_VERSION}" ]; then
+            sudo mkdir -p /opt/gradle && sudo chown -R "$USER" /opt/gradle
+            curl -sL "https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip" -o /tmp/gradle.zip
+            unzip -q /tmp/gradle.zip -d /opt/gradle
+          fi
+          echo "/opt/gradle/gradle-${GRADLE_VERSION}/bin" >> "$GITHUB_PATH"
+
+      - name: Unit tests
+        run: gradle --no-daemon :app:testDebugUnitTest
+
+      - name: Lint
+        run: gradle --no-daemon :app:lintDebug
+
+      - name: Debug APK
+        run: gradle --no-daemon :app:assembleDebug
+
+      - name: Upload reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reports
+          path: app/build/reports/

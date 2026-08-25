@@ -1,0 +1,79 @@
+package com.eddies.app.navigation
+
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.eddies.app.core.design.ThemeMode
+import com.eddies.app.data.prefs.SettingsDataStore
+import com.eddies.app.data.price.FxRepository
+import com.eddies.app.data.repo.AssetRepository
+import com.eddies.app.work.WorkScheduler
+import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
+import javax.inject.Inject
+
+data class RootUiState(
+    val loading: Boolean = true,
+    val themeMode: ThemeMode = ThemeMode.DARK,
+    val dynamicColor: Boolean = false,
+    val hideInRecents: Boolean = true,
+    val locked: Boolean = false,
+    val onboarded: Boolean = false,
+)
+
+/**
+ * Gates the splash and owns the app-lock state.
+ *
+ * Uses SharingStarted.Eagerly rather than WhileSubscribed because the splash
+ * asks for `loading` before anything is collecting, and a lazily started flow
+ * would still be reporting true.
+ */
+@HiltViewModel
+class RootViewModel @Inject constructor(
+    private val settings: SettingsDataStore,
+    private val assets: AssetRepository,
+    private val fx: FxRepository,
+    private val work: WorkScheduler,
+) : ViewModel() {
+
+    private val unlocked = MutableStateFlow(false)
+
+    val state: StateFlow<RootUiState> = combine(settings.settings, unlocked) { cfg, isUnlocked ->
+        RootUiState(
+            loading = false,
+            themeMode = cfg.themeMode,
+            dynamicColor = cfg.dynamicColor,
+            hideInRecents = cfg.hideInRecents,
+            locked = cfg.appLockEnabled && !isUnlocked,
+            onboarded = cfg.onboarded,
+        )
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, RootUiState())
+
+    init {
+        viewModelScope.launch {
+            // All three are idempotent and cheap after the first run.
+            assets.ensureSeeded()
+            fx.refreshIfStale()
+            work.ensureScheduled()
+        }
+    }
+
+    fun onUnlocked() {
+        unlocked.value = true
+    }
+
+    /**
+     * Re-locks on backgrounding. Deliberately immediate rather than honouring the
+     * auto-lock delay: the delay governs how long an unlocked session survives
+     * while in use, not whether leaving the app relocks it.
+     */
+    fun onBackgrounded() {
+        viewModelScope.launch {
+            if (settings.current().appLockEnabled) unlocked.value = false
+        }
+    }
+}
