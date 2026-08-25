@@ -111,6 +111,32 @@ third party how often the app is open. `FxRepository.rateOn` reads the last rate
 published *on or before* a date, because weekends and holidays have no
 publication and must not read as a gap.
 
+### Historical prices, and how deep each source goes
+
+Verified 2026-08-25. All keyless.
+
+- **Kraken** `/0/public/OHLC?pair=<altname>&interval=1440`. 720 candles, so about
+  two years of daily. **It speaks REST v1, not the socket dialect**: it wants
+  `XBTEUR` and keys the reply `XXBTZEUR`. Sending the v2 socket's `BTC/EUR`
+  returns "Unknown asset pair" and the chart silently stays empty, which is the
+  `wsname` trap in the other direction. `KrakenSymbols` therefore carries both
+  mappings, and `KrakenHistorySource` reads the reply by taking the single
+  array-valued key rather than reconstructing the name.
+- **Binance** `/api/v3/klines?symbol=<sym>&interval=1d&limit=1000`. 1000 candles,
+  about 2.7 years, the deepest of the three. Values are strings. Quoted in USDT.
+- **CoinPaprika** `/v1/tickers/{id}/historical?start=<date>&interval=1d`. **The
+  free tier is a rolling one year**: anything older is refused with
+  `{"error":"Getting daily historical data before ... is not allowed in this
+  plan"}`, and that error is a JSON object where an array is expected. The start
+  date is clamped rather than sent optimistically, or the chart ends up empty
+  instead of merely short.
+
+So long-tail coins get one year of history where exchange-listed ones get two or
+more. Nothing in the UI pretends otherwise; the chart starts where the data does.
+
+Both delta cleanly: Kraken takes `since` in seconds, Binance `startTime` in
+millis. A seven-day delta is about 640 bytes against 61 KB for the full pull.
+
 ### Koios, for Phase 2 staking
 
 `api.koios.rest`, public tier is keyless at 5000 requests/day, and
@@ -241,6 +267,10 @@ Storage Access Framework.
   doubles the top inset, which looks like a design choice rather than a bug.
 - **Hilt's Gradle plugin is flaky with the configuration cache.** Disabled in
   `gradle.properties`; do not turn it back on.
+- **Live prices are upserted, never appended.** `price_latest` holds one row per
+  asset. The v1 schema had a row per tick, and Kraken's ticker fires on every
+  trade, so a single liquid pair was tens of thousands of rows a day and a
+  database write per tick on a phone. Chart series live in `price_candles`.
 - **`set -o pipefail` plus `head` aborts silently.** `scripts/refresh-icons.sh`
   materialises before taking the head, because closing the pipe early SIGPIPEs
   the upstream stages and kills the script mid-run with no error.
@@ -282,20 +312,40 @@ cut that to roughly 1.1 MB. Re-run on a machine with `cwebp` installed.
 
 1. **Done.** Scaffold, container, GitHub CI, docs. Ledger schema and cost basis
    engine. Kraken and Binance sockets, aggregator fallback, FX. Portfolio,
-   Insights, Markets, Settings, asset detail, add/edit transaction. Charts.
-   Encrypted backup, CSV import and export. App lock. Dark by default. Advanced
-   trader mode.
-2. **Next.** Staking. `StakingProvider` with `CardanoKoiosProvider` first; the
+   Insights, Markets, Settings, asset detail, add/edit transaction. Encrypted
+   backup, CSV import and export. App lock. Dark by default. Advanced trader mode.
+
+2. **Done. Price history.** `HistorySource` with Kraken, Binance and CoinPaprika
+   implementations, all keyless. Range-selectable price chart on asset detail
+   (1D hourly, everything else daily), portfolio backfill, watchlist.
+
+   **Fetching is lazy and cached.** Opening a coin fetches that coin and nothing
+   else; the several hundred in the seed are never prefetched. A refresh sends
+   the newest cached timestamp as a delta hint, which against Kraken is about
+   640 bytes instead of the 61 KB a full pull costs. One in-flight request per
+   (asset, interval) stops the chart and the backfill duplicating work.
+
+   **The backfill is the exception, and has to be.** A portfolio total is a sum
+   across every held asset, so history for only the coins someone happened to
+   open would produce a number that is quietly missing the rest. It covers held
+   assets only, typically a handful, and shares the same cache.
+
+   Days before an asset's history begins value it at zero rather than carrying
+   the oldest known price backwards, which would draw a flat line that never
+   happened.
+
+3. **Next.** Staking. `StakingProvider` with `CardanoKoiosProvider` first; the
    user supplies a stake address per account and rewards import as
    `STAKING_REWARD` rows deduplicated on `(source, externalId)`. Portfolio totals
    already include them; asset detail already renders the principal-versus-
    rewards split. Add a rewards-over-time chart.
-3. Stocks, and a combined dashboard. New `AssetClass.STOCK` plus new
-   `PriceSource` implementations. The core tables do not change. Open question
-   deferred to then: which equity data provider, since free realtime equity data
-   is materially harder to source than crypto.
 
-**Present a short plan before starting 2 or 3.** Milestones get agreed before
+4. Stocks, and a combined dashboard. New `AssetClass.STOCK` plus new
+   `PriceSource` and `HistorySource` implementations. The core tables do not
+   change. Open question deferred to then: which equity data provider, since free
+   realtime equity data is materially harder to source than crypto.
+
+**Present a short plan before starting 3 or 4.** Milestones get agreed before
 they get built, not after.
 
 ## Verified in the sandbox, 2026-08-25

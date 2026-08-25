@@ -8,9 +8,11 @@ import androidx.room.Upsert
 import com.eddies.app.data.db.entity.AccountEntity
 import com.eddies.app.data.db.entity.AssetEntity
 import com.eddies.app.data.db.entity.AssetSourceRefEntity
+import com.eddies.app.data.db.entity.CandleInterval
+import com.eddies.app.data.db.entity.PriceCandleEntity
+import com.eddies.app.data.db.entity.PriceLatestEntity
 import com.eddies.app.data.db.entity.FxRateEntity
 import com.eddies.app.data.db.entity.PortfolioSnapshotEntity
-import com.eddies.app.data.db.entity.PriceSnapshotEntity
 import com.eddies.app.data.db.entity.TransactionEntity
 import com.eddies.app.data.db.entity.WatchlistEntity
 import kotlinx.coroutines.flow.Flow
@@ -147,23 +149,55 @@ interface TransactionDao {
 @Dao
 interface PriceDao {
     @Upsert
-    suspend fun upsert(snapshots: List<PriceSnapshotEntity>)
+    suspend fun upsertLatest(rows: List<PriceLatestEntity>)
 
-    /** The most recent snapshot per asset, for a cold start before the feed connects. */
+    @Query("SELECT * FROM price_latest")
+    suspend fun allLatest(): List<PriceLatestEntity>
+
+    @Upsert
+    suspend fun upsertCandles(rows: List<PriceCandleEntity>)
+
     @Query(
         """
-        SELECT p.* FROM price_snapshots p
-        INNER JOIN (SELECT assetId, MAX(timestamp) AS ts FROM price_snapshots GROUP BY assetId) latest
-        ON p.assetId = latest.assetId AND p.timestamp = latest.ts
+        SELECT * FROM price_candles
+        WHERE assetId = :assetId AND interval = :interval AND timestamp >= :since
+        ORDER BY timestamp
         """,
     )
-    suspend fun latestPerAsset(): List<PriceSnapshotEntity>
+    fun observeCandles(assetId: String, interval: CandleInterval, since: Long): Flow<List<PriceCandleEntity>>
 
-    @Query("SELECT * FROM price_snapshots WHERE assetId = :assetId AND timestamp >= :since ORDER BY timestamp")
-    suspend fun history(assetId: String, since: Long): List<PriceSnapshotEntity>
+    @Query(
+        """
+        SELECT * FROM price_candles
+        WHERE assetId = :assetId AND interval = :interval AND timestamp >= :since
+        ORDER BY timestamp
+        """,
+    )
+    suspend fun candles(assetId: String, interval: CandleInterval, since: Long): List<PriceCandleEntity>
 
-    @Query("DELETE FROM price_snapshots WHERE timestamp < :before")
-    suspend fun prune(before: Long)
+    /**
+     * The newest candle we hold, which is where a delta fetch resumes from.
+     * Null means nothing is cached and the first fetch should pull everything.
+     */
+    @Query("SELECT MAX(timestamp) FROM price_candles WHERE assetId = :assetId AND interval = :interval")
+    suspend fun newestCandle(assetId: String, interval: CandleInterval): Long?
+
+    @Query("SELECT MIN(timestamp) FROM price_candles WHERE assetId = :assetId AND interval = :interval")
+    suspend fun oldestCandle(assetId: String, interval: CandleInterval): Long?
+
+    /** Daily closes for every asset in one query, for the portfolio backfill. */
+    @Query(
+        """
+        SELECT * FROM price_candles
+        WHERE interval = 'DAY' AND assetId IN (:assetIds) AND timestamp >= :since
+        ORDER BY timestamp
+        """,
+    )
+    suspend fun dailyForAssets(assetIds: List<String>, since: Long): List<PriceCandleEntity>
+
+    /** Hourly candles age out; daily ones are the long-term series and are kept. */
+    @Query("DELETE FROM price_candles WHERE interval = 'HOUR' AND timestamp < :before")
+    suspend fun pruneHourly(before: Long)
 }
 
 @Dao

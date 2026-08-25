@@ -38,9 +38,10 @@ object DatabaseModule {
         val factory = SupportOpenHelperFactory(keyProvider.passphrase())
         return Room.databaseBuilder(context, EddiesDatabase::class.java, EddiesDatabase.NAME)
             .openHelperFactory(factory)
-            // Migrations go here as they are written. Never
-            // fallbackToDestructiveMigration: a hand-entered ledger has no other
-            // copy to restore from.
+            // Never fallbackToDestructiveMigration: a hand-entered ledger has no
+            // other copy to restore from. Migrations are explicit, and only the
+            // price cache tables may be dropped in one.
+            .addMigrations(EddiesDatabase.MIGRATION_1_2)
             .build()
     }
 

@@ -100,12 +100,49 @@ data class TransactionEntity(
     val externalId: String? = null,
 )
 
-/** Last known price per asset, so a cold start shows numbers before the socket opens. */
-@Entity(tableName = "price_snapshots", primaryKeys = ["assetId", "timestamp"])
-data class PriceSnapshotEntity(
-    val assetId: String,
+/**
+ * Last known price per asset, so a cold start shows numbers before the socket
+ * opens.
+ *
+ * One row per asset, upserted. NOT one row per tick: Kraken's ticker fires on
+ * every trade, so a row per tick is tens of thousands of writes a day for a
+ * single liquid pair, an unbounded table and constant disk I/O on a phone.
+ * Charts read [PriceCandleEntity] instead.
+ */
+@Entity(tableName = "price_latest")
+data class PriceLatestEntity(
+    @PrimaryKey val assetId: String,
     val timestamp: Long,
     val price: String,
+    val currency: String,
+    val source: PriceSourceId = PriceSourceId.MANUAL,
+)
+
+/** How wide one candle is. Charts pick the coarsest that fills the range. */
+enum class CandleInterval(val minutes: Int) {
+    HOUR(60),
+    DAY(1440),
+}
+
+/**
+ * A historical price candle, fetched from whichever feed the user selected.
+ *
+ * The interval is part of the key so hourly and daily series for the same asset
+ * coexist: a 1D chart needs hourly resolution and a 1Y chart would be unusable
+ * at that granularity.
+ */
+@Entity(
+    tableName = "price_candles",
+    primaryKeys = ["assetId", "interval", "timestamp"],
+    indices = [Index("assetId", "interval")],
+)
+data class PriceCandleEntity(
+    val assetId: String,
+    val interval: CandleInterval,
+    val timestamp: Long,
+    val close: String,
+    val high: String? = null,
+    val low: String? = null,
     val currency: String,
     val source: PriceSourceId = PriceSourceId.MANUAL,
 )

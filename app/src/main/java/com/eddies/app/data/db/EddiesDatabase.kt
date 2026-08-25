@@ -3,6 +3,9 @@ package com.eddies.app.data.db
 import androidx.room.Database
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
+import androidx.room.migration.Migration
+import androidx.sqlite.SQLiteConnection
+import androidx.sqlite.execSQL
 import com.eddies.app.data.db.dao.AccountDao
 import com.eddies.app.data.db.dao.AssetDao
 import com.eddies.app.data.db.dao.AssetSourceRefDao
@@ -16,7 +19,8 @@ import com.eddies.app.data.db.entity.AssetEntity
 import com.eddies.app.data.db.entity.AssetSourceRefEntity
 import com.eddies.app.data.db.entity.FxRateEntity
 import com.eddies.app.data.db.entity.PortfolioSnapshotEntity
-import com.eddies.app.data.db.entity.PriceSnapshotEntity
+import com.eddies.app.data.db.entity.PriceCandleEntity
+import com.eddies.app.data.db.entity.PriceLatestEntity
 import com.eddies.app.data.db.entity.TransactionEntity
 import com.eddies.app.data.db.entity.WatchlistEntity
 
@@ -34,13 +38,20 @@ import com.eddies.app.data.db.entity.WatchlistEntity
         AssetSourceRefEntity::class,
         AccountEntity::class,
         TransactionEntity::class,
-        PriceSnapshotEntity::class,
+        PriceLatestEntity::class,
+        PriceCandleEntity::class,
         FxRateEntity::class,
         PortfolioSnapshotEntity::class,
         WatchlistEntity::class,
     ],
-    version = 1,
-    exportSchema = false,
+    version = 2,
+    // Exported and committed, unlike the sibling projects.
+    //
+    // app/schemas/<db>/N.json holds the CREATE statements Room actually
+    // generates, so a hand-written migration can be diffed against them before
+    // it ships. Room compares the two at open time and a mismatch is a crash on
+    // launch, not a warning, which makes this the cheapest possible check.
+    exportSchema = true,
 )
 @TypeConverters(Converters::class)
 abstract class EddiesDatabase : RoomDatabase() {
@@ -56,11 +67,43 @@ abstract class EddiesDatabase : RoomDatabase() {
     companion object {
         const val NAME = "eddies.db"
 
-        // Migrations land here as MIGRATION_1_2 and friends, each with a one-line
-        // note saying what it adds, and are registered in DatabaseModule.
-        //
-        // If you write raw CREATE TABLE SQL in one, it must match Room's
-        // generated schema exactly, column order included. Room compares them at
-        // open time and a mismatch is a crash on launch, not a warning.
+        /**
+         * v2: price_snapshots becomes price_latest (one row per asset) plus
+         * price_candles (the chart series).
+         *
+         * The old table was written on every tick, which for a liquid pair is
+         * tens of thousands of rows a day and an unbounded database.
+         *
+         * Dropping it is safe and is the only destructive step allowed anywhere
+         * in this schema: every price is refetchable in one call. The ledger is
+         * never touched, because a transaction typed in by hand has no other copy.
+         *
+         * The CREATE statements must match Room's generated schema exactly,
+         * column order included. Room compares them at open time and a mismatch
+         * is a crash on launch, not a warning.
+         */
+        val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(connection: SQLiteConnection) {
+                connection.execSQL("DROP TABLE IF EXISTS `price_snapshots`")
+                connection.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `price_latest` (" +
+                        "`assetId` TEXT NOT NULL, `timestamp` INTEGER NOT NULL, " +
+                        "`price` TEXT NOT NULL, `currency` TEXT NOT NULL, " +
+                        "`source` TEXT NOT NULL, PRIMARY KEY(`assetId`))",
+                )
+                connection.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `price_candles` (" +
+                        "`assetId` TEXT NOT NULL, `interval` TEXT NOT NULL, " +
+                        "`timestamp` INTEGER NOT NULL, `close` TEXT NOT NULL, " +
+                        "`high` TEXT, `low` TEXT, `currency` TEXT NOT NULL, " +
+                        "`source` TEXT NOT NULL, " +
+                        "PRIMARY KEY(`assetId`, `interval`, `timestamp`))",
+                )
+                connection.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_price_candles_assetId_interval` " +
+                        "ON `price_candles` (`assetId`, `interval`)",
+                )
+            }
+        }
     }
 }
