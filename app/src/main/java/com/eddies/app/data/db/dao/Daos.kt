@@ -7,6 +7,7 @@ import androidx.room.Query
 import androidx.room.Upsert
 import com.eddies.app.data.db.entity.AccountEntity
 import com.eddies.app.data.db.entity.AssetEntity
+import com.eddies.app.data.db.entity.AssetCustodyEntity
 import com.eddies.app.data.db.entity.AssetSourceRefEntity
 import com.eddies.app.data.db.entity.CandleInterval
 import com.eddies.app.data.db.entity.PriceCandleEntity
@@ -255,4 +256,31 @@ interface WatchlistDao {
 
     @Query("SELECT assetId FROM watchlist")
     suspend fun assetIds(): List<String>
+}
+
+@Dao
+interface CustodyDao {
+    @Upsert
+    suspend fun upsert(entry: AssetCustodyEntity)
+
+    @Query("SELECT * FROM asset_custody WHERE assetId = :assetId")
+    fun observe(assetId: String): Flow<AssetCustodyEntity?>
+
+    @Query("SELECT * FROM asset_custody")
+    fun observeAll(): Flow<List<AssetCustodyEntity>>
+
+    @Query("SELECT * FROM asset_custody")
+    suspend fun all(): List<AssetCustodyEntity>
+
+    @Query("DELETE FROM asset_custody WHERE assetId = :assetId")
+    suspend fun clear(assetId: String)
+
+    /**
+     * Labels already in use, most recent first, for the suggestion row.
+     *
+     * This is what stops the set fragmenting into "Kraken", "kraken" and
+     * "Kraken exchange": the second coin kept somewhere is a tap, not retyping.
+     */
+    @Query("SELECT DISTINCT label FROM asset_custody ORDER BY updatedAt DESC LIMIT :limit")
+    suspend fun knownLabels(limit: Int = 12): List<String>
 }

@@ -22,7 +22,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -54,6 +56,7 @@ fun AssetDetailScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val holding = state.holding
     val zone = remember { ZoneId.systemDefault() }
+    var showCustodyDialog by remember { mutableStateOf(false) }
 
     Column(
         modifier = modifier.fillMaxWidth().verticalScroll(rememberScrollState())
@@ -163,6 +166,51 @@ fun AssetDetailScreen(
             }
         }
 
+        // Where it is kept. Always shown, including when unset, because an
+        // empty row is the prompt to fill it in; a row that only appears once
+        // filled is a feature nobody discovers.
+        Section(
+            title = "Stored at",
+            subtitle = state.custody?.note,
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth()
+                    .clickable {
+                        viewModel.refreshCustodySuggestions()
+                        showCustodyDialog = true
+                    }
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                val custody = state.custody
+                if (custody != null) {
+                    Icon(
+                        custody.type.icon(),
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                    Spacer(Modifier.size(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(custody.label, style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            custody.type.label,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Text("Change", style = MaterialTheme.typography.labelMedium)
+                } else {
+                    Text(
+                        "Not recorded. Tap to say where you keep it.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Text("Set", style = MaterialTheme.typography.labelMedium)
+                }
+            }
+        }
+
         // Staking is only shown when there is any, so a coin that cannot stake
         // never carries an empty section explaining that it has none.
         if (holding.position.stakingQuantity.signum() > 0) {
@@ -207,6 +255,24 @@ fun AssetDetailScreen(
                 }
             }
         }
+    }
+
+    if (showCustodyDialog) {
+        CustodyDialog(
+            initialType = state.custody?.type,
+            initialLabel = state.custody?.label.orEmpty(),
+            initialNote = state.custody?.note.orEmpty(),
+            suggestions = state.custodySuggestions,
+            onDismiss = { showCustodyDialog = false },
+            onSave = { type, label, note ->
+                viewModel.setCustody(type, label, note)
+                showCustodyDialog = false
+            },
+            onClear = {
+                viewModel.clearCustody()
+                showCustodyDialog = false
+            },
+        )
     }
 }
 

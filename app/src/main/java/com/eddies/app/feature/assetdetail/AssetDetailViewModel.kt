@@ -7,11 +7,14 @@ import androidx.navigation.toRoute
 import com.eddies.app.core.design.ChartMath
 import com.eddies.app.core.design.ChartPoint
 import com.eddies.app.core.design.ChartRange
+import com.eddies.app.data.db.entity.AssetCustodyEntity
 import com.eddies.app.data.db.entity.CandleInterval
+import com.eddies.app.data.db.entity.CustodyType
 import com.eddies.app.data.price.PriceHistoryRepository
 import com.eddies.app.core.ui.IconResolver
 import com.eddies.app.data.prefs.SettingsDataStore
 import com.eddies.app.data.repo.PortfolioRepository
+import com.eddies.app.data.repo.CustodyRepository
 import com.eddies.app.data.repo.TransactionRepository
 import com.eddies.app.data.repo.WatchlistRepository
 import com.eddies.app.domain.Holding
@@ -41,6 +44,8 @@ data class AssetDetailUiState(
     val loadingHistory: Boolean = false,
     val scrubbed: ChartPoint? = null,
     val watched: Boolean = false,
+    val custody: AssetCustodyEntity? = null,
+    val custodySuggestions: List<String> = emptyList(),
 ) {
     /** Change across the visible window, which is what the chart is showing. */
     val rangeChangePct: Double?
@@ -57,6 +62,7 @@ class AssetDetailViewModel @Inject constructor(
     settings: SettingsDataStore,
     private val history: PriceHistoryRepository,
     private val watchlist: WatchlistRepository,
+    private val custody: CustodyRepository,
     private val icons: IconResolver,
 ) : ViewModel() {
 
@@ -83,11 +89,13 @@ class AssetDetailViewModel @Inject constructor(
         transactions.observeForAsset(assetId),
         settings.settings,
         candles,
-        combine(range, scrubbed, loading, watchlist.assetIds) { r, scrub, isLoading, watched ->
-            Extras(r, scrub, isLoading, assetId in watched)
+        combine(
+            range, scrubbed, loading, watchlist.assetIds, custody.observe(assetId),
+        ) { r, scrub, isLoading, watched, custodyRow ->
+            Extras(r, scrub, isLoading, assetId in watched, custodyRow)
         },
     ) { holding, txs, cfg, candleRows, extras ->
-        val (r, scrub, isLoading, watched) = extras
+        val (r, scrub, isLoading, watched, custodyRow) = extras
         AssetDetailUiState(
             holding = holding,
             transactions = txs,
@@ -102,6 +110,8 @@ class AssetDetailViewModel @Inject constructor(
             loadingHistory = isLoading,
             scrubbed = scrub,
             watched = watched,
+            custody = custodyRow,
+            custodySuggestions = suggestions.value,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AssetDetailUiState())
 
@@ -131,10 +141,29 @@ class AssetDetailViewModel @Inject constructor(
         viewModelScope.launch { watchlist.toggle(assetId, !state.value.watched) }
     }
 
+    /** Names already used for other coins, offered as chips in the editor. */
+    private val suggestions = MutableStateFlow<List<String>>(emptyList())
+
+    fun refreshCustodySuggestions() {
+        viewModelScope.launch { suggestions.value = custody.knownLabels() }
+    }
+
+    fun setCustody(type: CustodyType, label: String, note: String) {
+        viewModelScope.launch {
+            custody.set(assetId, type, label, note)
+            suggestions.value = custody.knownLabels()
+        }
+    }
+
+    fun clearCustody() {
+        viewModelScope.launch { custody.clear(assetId) }
+    }
+
     private data class Extras(
         val range: ChartRange,
         val scrubbed: ChartPoint?,
         val loading: Boolean,
         val watched: Boolean,
+        val custody: AssetCustodyEntity?,
     )
 }

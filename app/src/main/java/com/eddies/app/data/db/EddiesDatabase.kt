@@ -9,6 +9,7 @@ import androidx.sqlite.execSQL
 import com.eddies.app.data.db.dao.AccountDao
 import com.eddies.app.data.db.dao.AssetDao
 import com.eddies.app.data.db.dao.AssetSourceRefDao
+import com.eddies.app.data.db.dao.CustodyDao
 import com.eddies.app.data.db.dao.FxDao
 import com.eddies.app.data.db.dao.PortfolioSnapshotDao
 import com.eddies.app.data.db.dao.PriceDao
@@ -16,6 +17,7 @@ import com.eddies.app.data.db.dao.TransactionDao
 import com.eddies.app.data.db.dao.WatchlistDao
 import com.eddies.app.data.db.entity.AccountEntity
 import com.eddies.app.data.db.entity.AssetEntity
+import com.eddies.app.data.db.entity.AssetCustodyEntity
 import com.eddies.app.data.db.entity.AssetSourceRefEntity
 import com.eddies.app.data.db.entity.FxRateEntity
 import com.eddies.app.data.db.entity.PortfolioSnapshotEntity
@@ -40,11 +42,12 @@ import com.eddies.app.data.db.entity.WatchlistEntity
         TransactionEntity::class,
         PriceLatestEntity::class,
         PriceCandleEntity::class,
+        AssetCustodyEntity::class,
         FxRateEntity::class,
         PortfolioSnapshotEntity::class,
         WatchlistEntity::class,
     ],
-    version = 2,
+    version = 3,
     // Exported and committed, unlike the sibling projects.
     //
     // app/schemas/<db>/N.json holds the CREATE statements Room actually
@@ -63,6 +66,7 @@ abstract class EddiesDatabase : RoomDatabase() {
     abstract fun fxDao(): FxDao
     abstract fun portfolioSnapshotDao(): PortfolioSnapshotDao
     abstract fun watchlistDao(): WatchlistDao
+    abstract fun custodyDao(): CustodyDao
 
     companion object {
         const val NAME = "eddies.db"
@@ -102,6 +106,24 @@ abstract class EddiesDatabase : RoomDatabase() {
                 connection.execSQL(
                     "CREATE INDEX IF NOT EXISTS `index_price_candles_assetId_interval` " +
                         "ON `price_candles` (`assetId`, `interval`)",
+                )
+            }
+        }
+
+        /**
+         * v3: asset_custody, "where is this coin actually kept".
+         *
+         * Purely additive. The SQL below was diffed against app/schemas/3.json
+         * before shipping, because Room compares them at open time and a
+         * mismatch is a crash on launch rather than a warning.
+         */
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(connection: SQLiteConnection) {
+                connection.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `asset_custody` (" +
+                        "`assetId` TEXT NOT NULL, `type` TEXT NOT NULL, " +
+                        "`label` TEXT NOT NULL, `note` TEXT, " +
+                        "`updatedAt` INTEGER NOT NULL, PRIMARY KEY(`assetId`))",
                 )
             }
         }

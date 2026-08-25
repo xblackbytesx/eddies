@@ -4,7 +4,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.eddies.app.core.ui.IconResolver
 import com.eddies.app.data.prefs.SettingsDataStore
+import com.eddies.app.data.repo.CustodyRepository
 import com.eddies.app.data.repo.PortfolioRepository
+import com.eddies.app.domain.CustodyGroup
+import com.eddies.app.domain.CustodyGrouper
 import com.eddies.app.domain.Holding
 import com.eddies.app.domain.PortfolioSummary
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -18,6 +21,7 @@ data class InsightsUiState(
     val summary: PortfolioSummary = PortfolioSummary.empty("EUR"),
     val allocation: List<Pair<Holding, Double>> = emptyList(),
     val movers: List<Holding> = emptyList(),
+    val custodyGroups: List<CustodyGroup> = emptyList(),
     val advanced: Boolean = false,
     val hidden: Boolean = false,
 )
@@ -26,13 +30,15 @@ data class InsightsUiState(
 class InsightsViewModel @Inject constructor(
     portfolio: PortfolioRepository,
     settings: SettingsDataStore,
+    custody: CustodyRepository,
     val icons: IconResolver,
 ) : ViewModel() {
 
     val state: StateFlow<InsightsUiState> = combine(
         portfolio.summary,
         settings.settings,
-    ) { summary, cfg ->
+        custody.observeAll(),
+    ) { summary, cfg, custodyByAsset ->
         InsightsUiState(
             summary = summary,
             allocation = summary.allocation().filter { it.second > 0.0 },
@@ -41,6 +47,10 @@ class InsightsViewModel @Inject constructor(
             movers = summary.holdings
                 .filter { it.price?.changePct24h != null }
                 .sortedByDescending { it.price?.changePct24h ?: 0.0 },
+            custodyGroups = CustodyGrouper.group(
+                holdings = summary.holdings.filter { it.position.quantity.signum() > 0 },
+                custodyByAsset = custodyByAsset.mapValues { (_, row) -> row.type to row.label },
+            ),
             advanced = cfg.advancedMode,
             hidden = cfg.hideBalances,
         )

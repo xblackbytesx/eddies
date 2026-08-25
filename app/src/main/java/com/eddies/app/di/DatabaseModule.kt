@@ -7,6 +7,7 @@ import com.eddies.app.data.db.EddiesDatabase
 import com.eddies.app.data.db.dao.AccountDao
 import com.eddies.app.data.db.dao.AssetDao
 import com.eddies.app.data.db.dao.AssetSourceRefDao
+import com.eddies.app.data.db.dao.CustodyDao
 import com.eddies.app.data.db.dao.FxDao
 import com.eddies.app.data.db.dao.PortfolioSnapshotDao
 import com.eddies.app.data.db.dao.PriceDao
@@ -41,7 +42,7 @@ object DatabaseModule {
             // Never fallbackToDestructiveMigration: a hand-entered ledger has no
             // other copy to restore from. Migrations are explicit, and only the
             // price cache tables may be dropped in one.
-            .addMigrations(EddiesDatabase.MIGRATION_1_2)
+            .addMigrations(EddiesDatabase.MIGRATION_1_2, EddiesDatabase.MIGRATION_2_3)
             .build()
     }
 
@@ -53,4 +54,5 @@ object DatabaseModule {
     @Provides fun provideFxDao(db: EddiesDatabase): FxDao = db.fxDao()
     @Provides fun providePortfolioSnapshotDao(db: EddiesDatabase): PortfolioSnapshotDao = db.portfolioSnapshotDao()
     @Provides fun provideWatchlistDao(db: EddiesDatabase): WatchlistDao = db.watchlistDao()
+    @Provides fun provideCustodyDao(db: EddiesDatabase): CustodyDao = db.custodyDao()
 }

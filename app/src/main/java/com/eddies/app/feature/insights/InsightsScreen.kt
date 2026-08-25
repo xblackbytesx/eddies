@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -28,6 +29,8 @@ import com.eddies.app.core.ui.AssetIcon
 import com.eddies.app.core.ui.EmptyHint
 import com.eddies.app.core.ui.PnlText
 import com.eddies.app.core.ui.Section
+import com.eddies.app.domain.CustodyGrouper
+import com.eddies.app.feature.assetdetail.icon
 import com.eddies.app.domain.MoneyFormat
 import java.math.BigDecimal
 
@@ -131,6 +134,47 @@ fun InsightsScreen(
                     MoneyFormat.fiat(state.summary.totalStakingValue, currency, state.hidden),
                     null,
                 )
+            }
+        }
+
+        // The point of the custody feature: which of my things are where, and
+        // how much sits in each place.
+        if (state.custodyGroups.isNotEmpty()) {
+            Section(
+                title = "Where it is kept",
+                subtitle = "Set this per coin on its detail screen.",
+            ) {
+                state.custodyGroups.forEachIndexed { i, group ->
+                    if (i > 0) HorizontalDivider()
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        val unrecorded = group.label == CustodyGrouper.UNASSIGNED
+                        Icon(
+                            imageVector = group.type.icon(),
+                            contentDescription = null,
+                            tint = if (unrecorded) MaterialTheme.colorScheme.onSurfaceVariant
+                            else MaterialTheme.colorScheme.primary,
+                        )
+                        Spacer(Modifier.size(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(group.label, style = MaterialTheme.typography.bodyLarge)
+                            Text(
+                                group.holdings.joinToString(", ") { it.asset.symbol },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 2,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                            )
+                        }
+                        Spacer(Modifier.size(8.dp))
+                        Text(
+                            MoneyFormat.fiat(group.value, currency, state.hidden),
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
+                }
             }
         }
 

@@ -16,6 +16,7 @@ data class BackupPayload(
     val accounts: List<BackupAccount> = emptyList(),
     val assets: List<BackupAsset> = emptyList(),
     val transactions: List<BackupTransaction> = emptyList(),
+    val custody: List<BackupCustody> = emptyList(),
 ) {
     companion object {
         const val CURRENT_VERSION = 1
@@ -95,4 +96,19 @@ data class BackupTransaction(
 data class BackupOptions(
     val settings: Boolean = true,
     val portfolio: Boolean = true,
+)
+
+/**
+ * Where each coin is kept.
+ *
+ * In the backup because losing it defeats the point of recording it: the moment
+ * you most need to know which wallet holds your BTC is when you are setting the
+ * app up again on a new phone.
+ */
+@Serializable
+data class BackupCustody(
+    val assetId: String,
+    val type: String,
+    val label: String,
+    val note: String? = null,
 )

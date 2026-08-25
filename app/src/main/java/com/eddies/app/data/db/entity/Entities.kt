@@ -181,3 +181,39 @@ data class WatchlistEntity(
     @PrimaryKey val assetId: String,
     val addedAt: Long = System.currentTimeMillis(),
 )
+
+/** The kind of place a coin sits. A closed set, so it can carry an icon and group. */
+enum class CustodyType(val label: String) {
+    HARDWARE_WALLET("Hardware wallet"),
+    EXCHANGE("Exchange"),
+    SOFTWARE_WALLET("Software wallet"),
+    COLD_STORAGE("Cold storage"),
+    DEFI("DeFi / staked"),
+    OTHER("Other"),
+}
+
+/**
+ * Where a coin is actually kept: "BTC is on the Ledger, ETH is on Kraken".
+ *
+ * Deliberately its own table rather than columns on [AssetEntity]. The asset
+ * rows are re-upserted wholesale whenever the bundled seed version changes, so
+ * anything the user typed there would be silently erased by a routine seed
+ * refresh.
+ *
+ * Also deliberately independent of the ledger. An account records where a
+ * transaction happened; this records where the coins live now, and the two
+ * differ the moment you buy on an exchange and move to a wallet. Keeping them
+ * separate means recording custody costs no transfer bookkeeping.
+ *
+ * One row per asset: the common case is all of one coin in one place. A coin
+ * genuinely split across two places is noted in [note] rather than modelled,
+ * which is a deliberate limit, not an oversight.
+ */
+@Entity(tableName = "asset_custody")
+data class AssetCustodyEntity(
+    @PrimaryKey val assetId: String,
+    val type: CustodyType,
+    val label: String,
+    val note: String? = null,
+    val updatedAt: Long = System.currentTimeMillis(),
+)
