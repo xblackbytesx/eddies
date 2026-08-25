@@ -209,6 +209,17 @@ and `stakingQuantity` falls out of the fold rather than needing its own bookkeep
 something a server owns, a transaction typed in by hand has no other copy.
 `fallbackToDestructiveMigration` would destroy the only one.
 
+**Custody lives in its own table, and must.** `asset_custody` records where a
+coin is actually kept. It is deliberately not columns on `AssetEntity`, because
+those rows are re-upserted wholesale whenever the bundled seed version changes
+and anything the user typed there would be silently erased by a routine icon
+refresh. It is equally deliberately independent of the ledger: an account records
+where a transaction happened, custody records where the coins live now, and the
+two diverge the moment you buy on an exchange and move to a wallet. Keeping them
+apart is what makes recording custody cost no transfer bookkeeping. One row per
+asset; a coin genuinely split across two places goes in the note rather than
+being modelled.
+
 **Asset ids are prefixed by class** (`crypto:btc-bitcoin`, `stock:NASDAQ:AAPL`).
 That prefix is the entire reason Phase 3 equities can arrive as a new
 `AssetClass` plus new source refs, with no migration of the ledger, the snapshots
@@ -334,18 +345,28 @@ cut that to roughly 1.1 MB. Re-run on a machine with `cwebp` installed.
    the oldest known price backwards, which would draw a flat line that never
    happened.
 
-3. **Next.** Staking. `StakingProvider` with `CardanoKoiosProvider` first; the
+3. **Done. Stored at.** `asset_custody` plus `CustodyGrouper`. A per-asset
+   location with a closed set of kinds (hardware wallet, exchange, software
+   wallet, cold storage, DeFi, other) for the icon and the grouping, and a free
+   text name because no curated exchange list would ever match a real setup.
+   Names already used appear as chips, which is what stops the set fragmenting
+   into "Kraken", "kraken" and "Kraken exchange". Editable from asset detail,
+   summarised in Insights under "Where it is kept", and carried in the encrypted
+   backup, because the moment you most need to know which wallet holds your BTC
+   is while setting the app up on a new phone.
+
+4. **Next.** Staking. `StakingProvider` with `CardanoKoiosProvider` first; the
    user supplies a stake address per account and rewards import as
    `STAKING_REWARD` rows deduplicated on `(source, externalId)`. Portfolio totals
    already include them; asset detail already renders the principal-versus-
    rewards split. Add a rewards-over-time chart.
 
-4. Stocks, and a combined dashboard. New `AssetClass.STOCK` plus new
+5. Stocks, and a combined dashboard. New `AssetClass.STOCK` plus new
    `PriceSource` and `HistorySource` implementations. The core tables do not
    change. Open question deferred to then: which equity data provider, since free
    realtime equity data is materially harder to source than crypto.
 
-**Present a short plan before starting 3 or 4.** Milestones get agreed before
+**Present a short plan before starting 4 or 5.** Milestones get agreed before
 they get built, not after.
 
 ## Verified in the sandbox, 2026-08-25

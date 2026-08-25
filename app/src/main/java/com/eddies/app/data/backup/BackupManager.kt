@@ -4,8 +4,11 @@ import com.eddies.app.BuildConfig
 import com.eddies.app.core.backup.BackupCrypto
 import com.eddies.app.data.db.dao.AccountDao
 import com.eddies.app.data.db.dao.AssetDao
+import com.eddies.app.data.db.dao.CustodyDao
 import com.eddies.app.data.db.entity.AccountEntity
+import com.eddies.app.data.db.entity.AssetCustodyEntity
 import com.eddies.app.data.db.entity.AssetEntity
+import com.eddies.app.data.db.entity.CustodyType
 import com.eddies.app.data.prefs.Aggregator
 import com.eddies.app.data.prefs.RealtimeFeed
 import com.eddies.app.data.prefs.SettingsDataStore
@@ -36,6 +39,7 @@ class BackupManager @Inject constructor(
     private val accountDao: AccountDao,
     private val assetDao: AssetDao,
     private val settings: SettingsDataStore,
+    private val custodyDao: CustodyDao,
     private val json: Json,
 ) {
 
@@ -55,6 +59,7 @@ class BackupManager @Inject constructor(
             accounts = accounts.map { it.toBackup() },
             assets = assets.map { it.toBackup() },
             transactions = txs.map { it.toBackup() },
+            custody = if (options.portfolio) custodyDao.all().map { it.toBackup() } else emptyList(),
         )
         BackupCrypto.encrypt(json.encodeToString(payload).toByteArray(), passphrase)
     }
@@ -109,6 +114,11 @@ class BackupManager @Inject constructor(
         val imported = transactions.importDeduplicated(
             payload.transactions.map { it.toDomain(idMap[it.accountLocalId] ?: defaultAccount) },
         )
+
+        // Restored after the assets exist, since it keys on them.
+        payload.custody.forEach { entry ->
+            runCatching { custodyDao.upsert(entry.toEntity()) }
+        }
 
         payload.settings?.let { applySettings(it) }
         imported
@@ -213,4 +223,18 @@ private fun BackupTransaction.toDomain(accountId: Long) = Transaction(
     note = note,
     source = runCatching { TxSource.valueOf(source) }.getOrDefault(TxSource.MANUAL),
     externalId = externalId,
+)
+
+private fun AssetCustodyEntity.toBackup() = BackupCustody(
+    assetId = assetId,
+    type = type.name,
+    label = label,
+    note = note,
+)
+
+private fun BackupCustody.toEntity() = AssetCustodyEntity(
+    assetId = assetId,
+    type = runCatching { CustodyType.valueOf(type) }.getOrDefault(CustodyType.OTHER),
+    label = label,
+    note = note,
 )

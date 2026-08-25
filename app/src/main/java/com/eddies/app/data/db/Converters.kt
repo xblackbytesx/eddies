@@ -2,6 +2,7 @@ package com.eddies.app.data.db
 
 import androidx.room.TypeConverter
 import com.eddies.app.data.db.entity.CandleInterval
+import com.eddies.app.data.db.entity.CustodyType
 import com.eddies.app.domain.AssetClass
 import com.eddies.app.domain.PriceSourceId
 import com.eddies.app.domain.TxSource
@@ -45,6 +46,13 @@ class Converters {
     @TypeConverter
     fun stringToTxSource(value: String): TxSource =
         runCatching { TxSource.valueOf(value) }.getOrDefault(TxSource.MANUAL)
+
+    @TypeConverter
+    fun custodyTypeToString(value: CustodyType): String = value.name
+
+    @TypeConverter
+    fun stringToCustodyType(value: String): CustodyType =
+        runCatching { CustodyType.valueOf(value) }.getOrDefault(CustodyType.OTHER)
 
     @TypeConverter
     fun candleIntervalToString(value: CandleInterval): String = value.name
