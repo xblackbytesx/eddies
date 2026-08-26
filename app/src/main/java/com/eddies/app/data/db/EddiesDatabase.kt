@@ -184,7 +184,7 @@ abstract class EddiesDatabase : RoomDatabase() {
                 connection.execSQL(
                     "INSERT INTO `portfolio_snapshots_new` " +
                         "(`day`, `assetClass`, `totalValue`, `costBasis`, `currency`, `takenAt`) " +
-                        "SELECT `day`, CRYPTO, `totalValue`, `costBasis`, `currency`, `takenAt` " +
+                        "SELECT `day`, 'CRYPTO', `totalValue`, `costBasis`, `currency`, `takenAt` " +
                         "FROM `portfolio_snapshots`",
                 )
                 connection.execSQL("DROP TABLE `portfolio_snapshots`")
