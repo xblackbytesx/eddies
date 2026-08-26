@@ -336,6 +336,20 @@ verified on a device.
 
 ## Invariants
 
+**Animations are keyed on identity, never on values.** The allocation ring's
+reveal is keyed on which holdings are present, not on their sizes. Keying it on
+the sizes meant every price tick built a fresh `Animatable` at zero and restarted
+the sweep, so against a feed that ticks several times a second the ring never
+finished revealing: it sat there collapsing and re-expanding forever. Values
+glide separately with `animateFloatAsState`. The same trap waits in any chart
+whose data changes while it is on screen.
+
+**The price feed is sampled before it reaches the portfolio.** Kraken's ticker
+fires on every trade, and each emission would otherwise refold the whole ledger,
+recompose the holdings list and re-sort it. One second still reads as
+unmistakably live. The cost is that cached prices on a cold start appear up to a
+second later, which is invisible next to opening the encrypted database.
+
 **Money is never a Double.** Quantities and prices are `BigDecimal`, persisted as
 TEXT via `Converters`. SQLite REAL is an IEEE double and cannot represent an
 18-decimal token balance; the symptom would be a silently wrong net worth with
@@ -597,31 +611,23 @@ cut that to roughly 1.1 MB. Re-run on a machine with `cwebp` installed.
 **Present a short plan before starting 8.** Milestones get agreed before
 they get built, not after.
 
-## Verified in the sandbox, 2026-08-25
+## Verified in the sandbox, 2026-08-26
 
-`:app:testDebugUnitTest` (96 tests) passes. `:app:assembleDebug` (98 MB,
-unminified) and `:app:assembleRelease` pass; the release splits are 15.8 MB
-(arm64-v8a), 14.1 MB (armeabi-v7a), 16.3 MB (x86_64) and 30 MB (universal). The
-release APK was unzipped and checked to contain 389 coin icons, `asset_seed.json`
-and `libsqlcipher.so` for every ABI.
+`:app:testFullDebugUnitTest` (165 tests) passes, along with `lintFullDebug`
+(0 errors), `assembleFullDebug`, `assembleDemoDebug` and `assembleFullRelease`.
+Release splits are roughly 15 MB (arm64-v8a), 13.6 MB (armeabi-v7a), 15.7 MB
+(x86_64) and 28.8 MB (universal). The release APK was unzipped and checked to
+contain 389 coin icons, `asset_seed.json` and `libsqlcipher.so` for every ABI,
+and every native library was confirmed 16 KB aligned.
 
-The Kraken, Binance, CoinPaprika and Frankfurter contracts above were checked
-against the live endpoints, including holding a real WebSocket open.
+`scripts/verify-migrations.sh` replays the whole migration chain against real
+SQLite and matches a fresh database.
+
+Every market-data contract above was checked against the live endpoints: Kraken
+(including holding a real WebSocket open), Binance, CoinPaprika, Frankfurter,
+Koios, Yahoo and Tradegate.
 
 What is NOT verified here, by construction: there is no phone, so nothing about
 SQLCipher opening a database, the biometric prompt, socket behaviour under real
 backgrounding, or how the charts feel has been observed. That is the user's to
-**Animations are keyed on identity, never on values.** The allocation ring's
-reveal is keyed on which holdings are present, not on their sizes. Keying it on
-the sizes meant every price tick built a fresh `Animatable` at zero and restarted
-the sweep, so against a feed that ticks several times a second the ring never
-finished revealing: it sat there collapsing and re-expanding forever. Values
-glide separately with `animateFloatAsState`. The same trap is waiting in any
-chart whose data changes while it is on screen.
-
-**The price feed is sampled before it reaches the portfolio.** Kraken's ticker
-fires on every trade, and each emission would otherwise refold the whole ledger,
-recompose the holdings list and re-sort it. One second still reads as
-unmistakably live. The cost is that cached prices on a cold start appear up to a
-second later, which is invisible next to opening the encrypted database.
-
+run.
