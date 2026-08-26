@@ -1,36 +1,42 @@
 # Eddies
 
-A crypto portfolio tracker for Android that keeps your holdings on your phone.
+A portfolio tracker for Android that keeps your holdings on your phone. Crypto
+and stocks, together or separately.
 
 No account. No server of its own. No analytics, no crash reporting, no ads. The
 database is encrypted, the app declares one meaningful permission (internet), and
-the only thing it ever sends anywhere is which coins to price.
+the only thing it ever sends anywhere is which instruments to price.
 
 Named after Cyberpunk 2077's eurodollars, which turned out to fit: EUR and USD
 are the two currencies it ships with.
 
 ## What it does
 
-- **Live prices.** A public WebSocket feed from Kraken or Binance, your choice,
-  with a REST aggregator covering coins no exchange lists. Kraken is the default
-  because it quotes EUR pairs directly, so no conversion is needed for most
-  holdings.
+- **Live crypto prices.** A public WebSocket feed from Kraken or Binance, your
+  choice, with a REST aggregator covering coins no exchange lists. Kraken is the
+  default because it quotes EUR pairs directly, so no conversion is needed for
+  most holdings.
+- **Stocks, ETFs and funds**, including **Tradegate**, which most trackers skip.
+  Splits are applied correctly, so a position through a 4:1 split shows the right
+  share count and an unchanged cost basis. Dividends are tracked as income.
+- **One portfolio, or two.** Filter to crypto, to stocks, or see them combined,
+  each with its own chart and profit figures.
 - **Real cost basis.** Positions are derived from a transaction ledger rather
   than a stored balance, so you get unrealised and realised profit, average cost,
   and a correct answer after a partial sell. Average, FIFO, LIFO and HIFO.
-- **Charts that say something.** Portfolio value over time with a draggable
-  crosshair, allocation, movers. Drawn directly rather than by a chart library,
-  so they follow your theme.
+- **Staking.** Point it at a Cardano stake address and rewards still accruing on
+  chain are added to your holding, shown separately from what you bought.
+- **Where things are kept.** Record that your BTC is on a hardware wallet and
+  your ETF is at a broker, then see everything grouped by location.
+- **Charts that say something.** Value over time with a draggable crosshair,
+  allocation, movers. Drawn directly rather than by a chart library, so they
+  follow your theme.
 - **Simple by default.** Advanced trader mode adds cost basis, realised P/L,
   market cap ranks and per-row detail once you want them.
 - **Encrypted backups.** A passphrase-protected file you write wherever you like.
   Plain CSV export too, for a spreadsheet or a tax tool, clearly labelled as
   unencrypted.
 - **Dark by default**, with a true-black OLED mode.
-
-Staking rewards and regular stocks are planned. The data model already
-distinguishes rewards from purchases, so a staked holding will show what you
-earned separately from what you bought.
 
 ## Installing
 
@@ -48,13 +54,16 @@ Most of that is the SQLCipher native library that encrypts the database.
 
 ## Privacy
 
-The app talks to three kinds of service, and only about prices:
+The app talks to a handful of services, and only about prices:
 
-- an exchange (Kraken or Binance) for live prices
-- CoinPaprika, or CoinGecko with your own key, for coins the exchange does not list
+- an exchange (Kraken or Binance) for live crypto prices
+- CoinPaprika, or CoinGecko with your own key, for coins no exchange lists
+- Yahoo Finance, or Finnhub with your own key, for shares
+- Tradegate, for instruments held there
+- Koios, if you add a Cardano stake address
 - Frankfurter, for European Central Bank currency rates
 
-Those requests name the coins being priced. That is unavoidable for a price, but
+Those requests name the instruments being priced. That is unavoidable for a price, but
 it is why coin icons ship inside the app rather than being fetched, and why coin
 search is offline unless you turn remote lookup on.
 
@@ -71,10 +80,17 @@ Everything runs in a container. There is no need for a local JDK or Android SDK.
 ```
 make test      # unit tests, the fast gate
 make build     # debug APK  -> build-output/
+make demo      # demo APK with a fake portfolio, for screenshots
 make lint
 make release   # release APKs, signed if you have a keystore configured
 make shell     # a shell in the build container
 ```
+
+`make demo` produces a separate app (`com.eddies.app.demo`, "Eddies Demo") that
+installs alongside the real one and starts with a fabricated portfolio. It has
+its own applicationId and therefore its own database, so it cannot see your real
+holdings. Prices, charts and staking in it are live and real; only the
+transactions are invented.
 
 Every build prints the APKs it produced with timestamps, and flags anything left
 over from an earlier run as `STALE`. Check it rather than assuming.

@@ -57,13 +57,18 @@ jobs:
           echo "/opt/gradle/gradle-${GRADLE_VERSION}/bin" >> "$GITHUB_PATH"
 
       - name: Unit tests
-        run: gradle --no-daemon :app:testDebugUnitTest
+        run: gradle --no-daemon :app:testFullDebugUnitTest
 
       - name: Lint
-        run: gradle --no-daemon :app:lintDebug
+        run: gradle --no-daemon :app:lintFullDebug
 
       - name: Debug APK
-        run: gradle --no-daemon :app:assembleDebug
+        run: gradle --no-daemon :app:assembleFullDebug
+
+      # The demo flavour shares all app code, so a change that breaks it breaks
+      # the screenshots without anyone noticing until release time.
+      - name: Demo flavour still builds
+        run: gradle --no-daemon :app:assembleDemoDebug
 
       - name: Upload reports on failure
         if: failure()

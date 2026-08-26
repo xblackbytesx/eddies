@@ -9,7 +9,7 @@ services:
     volumes:
       - ..:/workspace
       - gradle-cache:/opt/gradle-home
-    command: bash docker/run-gradle.sh :app:assembleDebug
+    command: bash docker/run-gradle.sh :app:assembleFullDebug
 
   build-release:
     image: eddies-build
@@ -19,7 +19,7 @@ services:
     volumes:
       - ..:/workspace
       - gradle-cache:/opt/gradle-home
-    command: bash docker/run-gradle.sh :app:assembleRelease
+    command: bash docker/run-gradle.sh :app:assembleFullRelease
 
   test:
     image: eddies-build
@@ -29,7 +29,7 @@ services:
     volumes:
       - ..:/workspace
       - gradle-cache:/opt/gradle-home
-    command: bash docker/run-gradle.sh :app:testDebugUnitTest
+    command: bash docker/run-gradle.sh :app:testFullDebugUnitTest
 
   lint:
     image: eddies-build
@@ -39,7 +39,7 @@ services:
     volumes:
       - ..:/workspace
       - gradle-cache:/opt/gradle-home
-    command: bash docker/run-gradle.sh :app:lintDebug
+    command: bash docker/run-gradle.sh :app:lintFullDebug
 
   shell:
     image: eddies-build
@@ -53,3 +53,13 @@ services:
 
 volumes:
   gradle-cache:
+
+  demo:
+    image: eddies-build
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    volumes:
+      - ..:/workspace
+      - gradle-cache:/opt/gradle-home
+    command: bash docker/run-gradle.sh :app:assembleDemoDebug

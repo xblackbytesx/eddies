@@ -15,8 +15,9 @@ There is no Android toolchain on the host in normal use. Build and test through
 the container. Do not run `./gradlew` or `adb` directly on a dev box.
 
 ```
-make test    # :app:testDebugUnitTest, the fast gate. Run this first
-make build   # debug APK  -> build-output/eddies-debug.apk
+make test    # :app:testFullDebugUnitTest, the fast gate. Run this first
+make build   # debug APK for the real app -> build-output/eddies-full-*.apk
+make demo    # demo APK for screenshots, installs alongside the real app
 make lint
 make release # release APKs (signed if keystore.properties/env present)
 make shell   # container shell for one-off gradle tasks
@@ -43,6 +44,45 @@ load-bearing: `actions/upload-artifact` must be `@v4` (v3 was shut down in
 January 2025 and hard-fails), the release job needs an explicit
 `permissions: contents: write`, and releases are published with `gh release
 create` rather than the Gitea API curl dance.
+
+## Demo mode is a flavour, not a setting
+
+`make demo` builds a separate installable app, `com.eddies.app.demo`, with a
+fabricated portfolio for screenshots. It shares every line of app code with the
+real build.
+
+**Why not a runtime toggle.** Six places write to the database and two of them
+run outside any screen: `RootViewModel` on every launch and `DailyWorker` on a
+schedule. A toggle would have to be honoured by all six, forever, including in
+code not yet written, and `DailyWorker` can fire mid-screenshot. A different
+applicationId means a different data directory, so the demo build cannot reach
+the real ledger at all. That isolation is enforced by the operating system rather
+than by us remembering.
+
+**No conditionals anywhere.** `DemoSeeder` is an interface in `main` with a
+no-op implementation in `src/full` and the real one in `src/demo`, bound by a
+Hilt module in each source set. Nothing in the app asks whether it is in demo
+mode. Verified: `DemoPortfolio` does not appear in the full build's dex at all,
+so it is not merely unreachable, it is absent.
+
+**Only the transactions are invented.** Prices, staking, Yahoo history, splits
+and cost basis all run through the real code against the real feeds, which is
+what makes the screenshots honest. The demo Cardano stake address is a real
+public one, so the staking figure is fetched through the real Koios path.
+
+Consequence worth knowing: totals move between screenshot sessions, because the
+prices are live. If a set of shots ever needs to match exactly, that is the
+argument for seeding price history too, and it is not built.
+
+`app/src/demo/.../DemoPortfolio.kt` is the data. It deliberately includes a
+realised loss, several custody locations, dividends, staking and a Tradegate
+holding, so every screen has something to show. Screenshots that are uniformly
+green read as marketing rather than as a tool.
+
+**CI builds the demo flavour on every push** so it cannot rot unnoticed, and the
+release workflow builds `assembleFullRelease` explicitly. A release must never
+publish a demo APK: it carries a fabricated portfolio and would look like real
+data.
 
 ## The market-data contract. Read this before touching `data/price/`
 
@@ -544,12 +584,17 @@ cut that to roughly 1.1 MB. Re-run on a machine with `cwebp` installed.
    check-digit validated locally so a typo is caught before a request goes out
    and the message can say "typo" rather than "not found".
 
-7. **Parked.** Dividend reinvestment (DRIP), where a dividend buys shares rather
+7. **Done. Demo flavour.** A separate installable app with a fabricated
+   portfolio, for store and release screenshots, sharing all app code. Isolation
+   is structural rather than conditional: see the section above for why a
+   runtime toggle was rejected.
+
+8. **Parked.** Dividend reinvestment (DRIP), where a dividend buys shares rather
    than paying cash. It needs per-position reinvestment settings and
    reconciliation against what the broker actually did, and the ledger already
    represents it as a DIVIDEND plus a BUY for anyone who wants it today.
 
-**Present a short plan before starting 7.** Milestones get agreed before
+**Present a short plan before starting 8.** Milestones get agreed before
 they get built, not after.
 
 ## Verified in the sandbox, 2026-08-25

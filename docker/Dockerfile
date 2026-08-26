@@ -30,4 +30,4 @@ RUN curl -sL "https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}
 # Root on purpose: the repo is bind-mounted and run-gradle.sh chowns outputs
 # back to the host user afterwards.
 WORKDIR /workspace
-CMD ["bash", "docker/run-gradle.sh", ":app:assembleDebug"]
+CMD ["bash", "docker/run-gradle.sh", ":app:assembleFullDebug"]

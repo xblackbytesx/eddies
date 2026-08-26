@@ -2,14 +2,15 @@
 COMPOSE := docker compose -f docker/docker-compose.yml
 
 .DEFAULT_GOAL := help
-.PHONY: help build app debug release test lint shell clean
+.PHONY: help build app debug demo release test lint shell clean
 
 ## Lists the targets. Bare `make` lands here rather than guessing.
 help:
 	@echo "Eddies: run everything through the build container:"
 	@echo
-	@echo "  make build     debug APK   → build-output/eddies-debug.apk"
-	@echo "  make release   release APK → build-output/eddies-release*.apk"
+	@echo "  make build     debug APK   → build-output/eddies-full-*.apk"
+	@echo "  make demo      demo APK for screenshots, installs alongside the real app"
+	@echo "  make release   release APKs → build-output/eddies-full-*.apk"
 	@echo "  make test      JVM unit tests, the fast gate, run before build"
 	@echo "  make lint"
 	@echo "  make shell     interactive container for one-off gradle tasks"
@@ -17,9 +18,17 @@ help:
 	@echo
 	@echo "Every build prints the APKs it produced, with timestamps. Check them."
 
-## Debug APK → build-output/eddies-debug.apk
+## Debug APK for the real app
 build:
 	$(COMPOSE) run --rm build
+
+## Demo APK: a separate app with a fake portfolio, for screenshots
+#
+# Installs alongside the real one as com.eddies.app.demo. A different
+# applicationId means a different data directory, so it cannot read the real
+# ledger. That is the whole reason it is a flavour and not a setting.
+demo:
+	$(COMPOSE) run --rm demo
 
 # Aliases for the names a person actually reaches for. Without them `make app`
 # *silently succeeds doing nothing*: `app/` is a real directory, so make decides
