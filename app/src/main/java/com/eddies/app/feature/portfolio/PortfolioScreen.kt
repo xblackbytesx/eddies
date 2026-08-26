@@ -114,6 +114,10 @@ fun PortfolioScreen(
             }
             items(state.holdings, key = { it.asset.id }) { holding ->
                 HoldingRow(
+                    // Rows are ordered by value, so two similar holdings swap
+                    // places as prices move. With a stable key and this, the row
+                    // glides to its new position instead of snapping there.
+                    modifier = Modifier.animateItem(),
                     holding = holding,
                     hidden = state.hidden,
                     advanced = state.advanced,
@@ -214,6 +218,7 @@ private fun RangeSelector(selected: ChartRange, onSelect: (ChartRange) -> Unit) 
 @Composable
 private fun HoldingRow(
     holding: Holding,
+    modifier: Modifier = Modifier,
     hidden: Boolean,
     advanced: Boolean,
     compact: Boolean,
@@ -223,7 +228,7 @@ private fun HoldingRow(
     Surface(
         shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surfaceContainer,
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        modifier = modifier.fillMaxWidth().clickable(onClick = onClick),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(

@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.sample
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.withLock
@@ -72,6 +73,12 @@ class PriceRepository @Inject constructor(
             settings.settings.map { it.realtimeFeed to it.baseCurrency }.distinctUntilChanged(),
         ) { ids, (feed, base) -> Triple(ids, feed, base) }
             .flatMapLatest { (ids, feed, base) -> pricesFor(ids, feed, base) }
+            // Kraken's ticker fires on every trade, so a liquid pair emits many
+            // times a second. Nothing downstream benefits: every emission refolds
+            // the whole ledger, recomposes the holdings list and re-sorts it, and
+            // a total that changes five times a second is noise rather than
+            // information. One second still reads as unmistakably live.
+            .sample(UPDATE_INTERVAL_MS)
             .stateIn(
                 scope = scope,
                 started = SharingStarted.WhileSubscribed(stopTimeoutMillis = 5_000),
@@ -212,5 +219,19 @@ class PriceRepository @Inject constructor(
      */
     suspend fun prune(hourlyRetentionDays: Int = 60) {
         priceDao.pruneHourly(System.currentTimeMillis() - hourlyRetentionDays * 24L * 60 * 60 * 1000)
+    }
+
+    private companion object {
+        /**
+         * How often the portfolio is allowed to recompute from live prices.
+         *
+         * The tradeoff: sample() emits at the end of each window, so the cached
+         * prices seeded on a cold start appear up to a second later than they
+         * used to. That is invisible in practice, since opening the encrypted
+         * database and reading the ledger already takes longer than that, and it
+         * is worth trading for not refolding the whole ledger dozens of times a
+         * second while the app sits open.
+         */
+        const val UPDATE_INTERVAL_MS = 1_000L
     }
 }
