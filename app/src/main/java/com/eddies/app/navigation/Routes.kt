@@ -13,3 +13,6 @@ import kotlinx.serialization.Serializable
 @Serializable data object AccountsRoute
 @Serializable data object BackupRoute
 @Serializable data object AboutRoute
+
+/** The whole ledger, across every asset. */
+@Serializable data object TransactionsRoute

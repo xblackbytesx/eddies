@@ -40,6 +40,7 @@ import com.eddies.app.domain.CostBasisMethod
 @Composable
 fun SettingsScreen(
     onOpenBackup: () -> Unit,
+    onOpenTransactions: () -> Unit,
     onOpenAccounts: () -> Unit,
     onOpenAbout: () -> Unit,
     modifier: Modifier = Modifier,
@@ -243,6 +244,12 @@ fun SettingsScreen(
         }
 
         Section("Data") {
+            NavRow(
+                title = "Transaction history",
+                subtitle = "Every buy, sell, dividend and reward, across all assets.",
+                onClick = onOpenTransactions,
+            )
+            HorizontalDivider()
             NavRow(
                 title = "Backup and restore",
                 subtitle = "Encrypted portfolio file, or a plain CSV.",

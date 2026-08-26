@@ -26,7 +26,6 @@ make shell   # container shell for one-off gradle tasks
 After changing a migration, also run `scripts/verify-migrations.sh`. Migration
 SQL is a string: the compiler cannot check it and the JVM suite cannot execute
 it, so it is the one part of this app that ships unverified unless you run that.
-```
 
 Definition of done: `make test` passes, and for anything touching UI or the
 build, `make build` produces an APK. **Check the timestamp it prints.** Never
@@ -305,7 +304,7 @@ app/src/main/java/com/eddies/app/
                AssetIdentity, MoneyFormat, Ledger      (all framework-free)
   di/          DatabaseModule, NetworkModule, WorkModule
   feature/     portfolio/ insights/ markets/ assetdetail/ addtransaction/
-               accounts/ settings/ backup/ about/ lock/
+               transactions/ accounts/ settings/ backup/ about/ lock/
   navigation/  Routes, EddiesNavHost, RootViewModel
   work/        DailyWorker, WorkScheduler
 app/src/main/assets/  coins/*.png (389), asset_seed.json (600 coins)
@@ -603,12 +602,29 @@ cut that to roughly 1.1 MB. Re-run on a machine with `cwebp` installed.
    is structural rather than conditional: see the section above for why a
    runtime toggle was rejected.
 
-8. **Parked.** Dividend reinvestment (DRIP), where a dividend buys shares rather
+8. **Done. Loose ends.** Three things the app half-promised. The secondary
+   currency setting was stored, backed up and settable but never displayed
+   anywhere; it now sits under the portfolio total, and only when one is set and
+   differs from the main one. Transactions were reachable only per asset, so the
+   ledger as a whole could not be read; there is now an all-transactions screen,
+   which is also the only place a fully sold position is visible, since it leaves
+   the portfolio but its realised profit stays in the totals. And `onboarded` was
+   written and read but nothing ever branched on it; it now separates "never
+   started" from "sold everything", which want different empty states.
+
+9. **Parked.** Dividend reinvestment (DRIP), where a dividend buys shares rather
    than paying cash. It needs per-position reinvestment settings and
    reconciliation against what the broker actually did, and the ledger already
    represents it as a DIVIDEND plus a BUY for anyone who wants it today.
 
-**Present a short plan before starting 8.** Milestones get agreed before
+   Also parked, in rough order of value if picked up: a home screen widget
+   (glanceable net worth, the highest-frequency interaction a tracker has), a
+   broker-aware CSV import that recognises DEGIRO, Trade Republic, Kraken and
+   Bitvavo exports by their header row rather than making the user map columns,
+   and a per-year 1 January valuation, which several European wealth-tax
+   regimes ask for and which the daily snapshots can already answer exactly.
+
+**Present a short plan before starting 9.** Milestones get agreed before
 they get built, not after.
 
 ## Verified in the sandbox, 2026-08-26

@@ -7,6 +7,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Insights
 import androidx.compose.material.icons.filled.PieChart
+import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -40,6 +41,7 @@ import com.eddies.app.feature.lock.LockScreen
 import com.eddies.app.feature.markets.MarketsScreen
 import com.eddies.app.feature.portfolio.PortfolioScreen
 import com.eddies.app.feature.settings.SettingsScreen
+import com.eddies.app.feature.transactions.TransactionsScreen
 import kotlin.reflect.KClass
 
 private data class Tab(
@@ -85,6 +87,7 @@ fun EddiesNavHost(
         destination?.hasRoute(BackupRoute::class) == true -> "Backup and restore"
         destination?.hasRoute(AccountsRoute::class) == true -> "Accounts"
         destination?.hasRoute(AboutRoute::class) == true -> "About"
+        destination?.hasRoute(TransactionsRoute::class) == true -> "All transactions"
         else -> tabs.firstOrNull { destination?.hasRoute(it.routeClass) == true }?.label ?: "Eddies"
     }
 
@@ -94,6 +97,16 @@ fun EddiesNavHost(
         topBar = {
             TopAppBar(
                 title = { Text(title) },
+                actions = {
+                    if (destination?.hasRoute(PortfolioRoute::class) == true) {
+                        IconButton(onClick = { navController.navigate(TransactionsRoute) }) {
+                            Icon(
+                                Icons.Default.ReceiptLong,
+                                contentDescription = "All transactions",
+                            )
+                        }
+                    }
+                },
                 navigationIcon = {
                     if (!isTab) {
                         IconButton(onClick = { navController.popBackStack() }) {
@@ -135,7 +148,11 @@ fun EddiesNavHost(
         Box(Modifier.padding(padding)) {
             NavHost(navController = navController, startDestination = PortfolioRoute) {
                 composable<PortfolioRoute> {
-                    PortfolioScreen(onOpenAsset = { navController.navigate(AssetDetailRoute(it)) })
+                    PortfolioScreen(
+                        onOpenAsset = { navController.navigate(AssetDetailRoute(it)) },
+                        onAddPosition = { navController.navigate(AddPositionSearchRoute) },
+                        onOpenBackup = { navController.navigate(BackupRoute) },
+                    )
                 }
                 composable<InsightsRoute> { InsightsScreen() }
                 composable<MarketsRoute> {
@@ -144,6 +161,7 @@ fun EddiesNavHost(
                 composable<SettingsRoute> {
                     SettingsScreen(
                         onOpenBackup = { navController.navigate(BackupRoute) },
+                        onOpenTransactions = { navController.navigate(TransactionsRoute) },
                         onOpenAccounts = { navController.navigate(AccountsRoute) },
                         onOpenAbout = { navController.navigate(AboutRoute) },
                     )
@@ -168,6 +186,11 @@ fun EddiesNavHost(
                 }
                 composable<AddTransactionRoute> {
                     AddTransactionScreen(onDone = { navController.popBackStack() })
+                }
+                composable<TransactionsRoute> {
+                    TransactionsScreen(
+                        onEdit = { assetId, txId -> navController.navigate(AddTransactionRoute(assetId, txId)) },
+                    )
                 }
                 composable<AccountsRoute> { AccountsScreen() }
                 composable<BackupRoute> { BackupScreen() }
