@@ -40,6 +40,7 @@ import com.eddies.app.core.ui.PnlText
 import com.eddies.app.core.ui.StaleBadge
 import com.eddies.app.domain.Holding
 import com.eddies.app.domain.MoneyFormat
+import com.eddies.app.domain.PortfolioScope
 import java.math.BigDecimal
 import java.time.ZoneId
 
@@ -61,6 +62,23 @@ fun PortfolioScreen(
         ),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
+        if (state.showScopeSelector) {
+            item {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                ) {
+                    PortfolioScope.entries.forEach { option ->
+                        FilterChip(
+                            selected = option == state.scope,
+                            onClick = { viewModel.setScope(option) },
+                            label = { Text(option.label) },
+                        )
+                    }
+                }
+            }
+        }
+
         item {
             TotalHeader(
                 state = state,
@@ -114,12 +132,16 @@ private fun TotalHeader(state: PortfolioUiState, onToggleHidden: () -> Unit) {
     // While scrubbing the chart, the headline shows the scrubbed value: the whole
     // point of the gesture is to read a past total, and leaving today's number up
     // there makes the crosshair meaningless.
-    val displayValue = state.scrubbed?.let { BigDecimal.valueOf(it.value) } ?: summary.totalValue
+    val displayValue = state.scrubbed?.let { BigDecimal.valueOf(it.value) } ?: state.scopedValue
 
     Column(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                text = "Total value",
+                text = when (state.scope) {
+                    com.eddies.app.domain.PortfolioScope.ALL -> "Total value"
+                    com.eddies.app.domain.PortfolioScope.CRYPTO -> "Crypto value"
+                    com.eddies.app.domain.PortfolioScope.STOCKS -> "Stocks value"
+                },
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -141,14 +163,14 @@ private fun TotalHeader(state: PortfolioUiState, onToggleHidden: () -> Unit) {
         )
         Row(verticalAlignment = Alignment.CenterVertically) {
             PnlText(
-                text = MoneyFormat.signedFiat(summary.totalUnrealizedPnl, summary.currency, state.hidden),
-                value = summary.totalUnrealizedPnl,
+                text = MoneyFormat.signedFiat(state.scopedPnl, summary.currency, state.hidden),
+                value = state.scopedPnl,
                 style = MaterialTheme.typography.bodyLarge,
             )
             Spacer(Modifier.size(10.dp))
             PnlText(
-                text = MoneyFormat.percent(summary.totalPnlPct, state.hidden),
-                value = summary.totalUnrealizedPnl,
+                text = MoneyFormat.percent(state.scopedPnlPct, state.hidden),
+                value = state.scopedPnl,
                 style = MaterialTheme.typography.bodyLarge,
                 showArrow = false,
             )
@@ -156,10 +178,12 @@ private fun TotalHeader(state: PortfolioUiState, onToggleHidden: () -> Unit) {
         if (state.advanced) {
             Spacer(Modifier.size(6.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                Stat("Cost", MoneyFormat.fiat(summary.totalCostBasis, summary.currency, state.hidden))
-                Stat("Realised", MoneyFormat.signedFiat(summary.totalRealizedPnl, summary.currency, state.hidden))
-                if (summary.totalStakingValue.signum() > 0) {
-                    Stat("Staked", MoneyFormat.fiat(summary.totalStakingValue, summary.currency, state.hidden))
+                Stat("Cost", MoneyFormat.fiat(state.scopedCost, summary.currency, state.hidden))
+                Stat("Realised", MoneyFormat.signedFiat(state.scopedRealized, summary.currency, state.hidden))
+                if (state.scopedIncome.signum() > 0) {
+                    // Staking and dividends together: everything earned rather
+                    // than bought, whichever class it came from.
+                    Stat("Earned", MoneyFormat.fiat(state.scopedIncome, summary.currency, state.hidden))
                 }
             }
         }

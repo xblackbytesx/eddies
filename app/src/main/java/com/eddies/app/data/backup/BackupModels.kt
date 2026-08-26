@@ -17,6 +17,7 @@ data class BackupPayload(
     val assets: List<BackupAsset> = emptyList(),
     val transactions: List<BackupTransaction> = emptyList(),
     val custody: List<BackupCustody> = emptyList(),
+    val splits: List<BackupSplit> = emptyList(),
 ) {
     companion object {
         const val CURRENT_VERSION = 1
@@ -90,6 +91,7 @@ data class BackupTransaction(
     val note: String? = null,
     val source: String,
     val externalId: String? = null,
+    val cashAmount: String? = null,
 )
 
 /** What the user chose to include. */
@@ -111,4 +113,19 @@ data class BackupCustody(
     val type: String,
     val label: String,
     val note: String? = null,
+)
+
+/**
+ * Share splits.
+ *
+ * In the backup because a restored ledger without them reports a pre-split share
+ * count, which is silently wrong rather than visibly missing. They are
+ * refetchable, but only while the provider still serves that symbol.
+ */
+@Serializable
+data class BackupSplit(
+    val assetId: String,
+    val timestamp: Long,
+    val numerator: String,
+    val denominator: String,
 )

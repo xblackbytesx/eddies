@@ -9,6 +9,7 @@ import com.eddies.app.data.prefs.SettingsDataStore
 import com.eddies.app.data.repo.PortfolioBackfill
 import com.eddies.app.data.repo.PortfolioRepository
 import com.eddies.app.domain.Holding
+import com.eddies.app.domain.PortfolioScope
 import com.eddies.app.domain.PortfolioSummary
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -25,13 +26,33 @@ data class PortfolioUiState(
     val summary: PortfolioSummary = PortfolioSummary.empty("EUR"),
     val history: List<ChartPoint> = emptyList(),
     val range: ChartRange = ChartRange.MONTH,
+    val scope: PortfolioScope = PortfolioScope.ALL,
     val advanced: Boolean = false,
     val hidden: Boolean = false,
     val compact: Boolean = false,
     val scrubbed: ChartPoint? = null,
 ) {
-    val holdings: List<Holding> get() = summary.holdings
-    val isEmpty: Boolean get() = summary.holdings.isEmpty()
+    /** Only what the selected scope covers. */
+    val holdings: List<Holding> get() = summary.holdings.filter { scope.matches(it.asset.id) }
+
+    val isEmpty: Boolean get() = holdings.isEmpty()
+
+    /**
+     * Totals for the scope, derived from the same holdings the list shows, so
+     * the headline figure and the rows under it can never disagree.
+     */
+    val scopedValue: java.math.BigDecimal get() = holdings.sumOf { it.marketValue }
+    val scopedCost: java.math.BigDecimal get() = holdings.sumOf { it.position.costBasis }
+    val scopedPnl: java.math.BigDecimal get() = holdings.sumOf { it.unrealizedPnl }
+    val scopedIncome: java.math.BigDecimal get() = holdings.sumOf { it.incomeValue }
+    val scopedRealized: java.math.BigDecimal get() = holdings.sumOf { it.position.realizedPnl }
+
+    val scopedPnlPct: Double?
+        get() = scopedCost.takeIf { it.signum() != 0 }
+            ?.let { scopedPnl.divide(it, com.eddies.app.domain.MC).toDouble() * 100.0 }
+
+    /** The selector only earns its place once more than one class is held. */
+    val showScopeSelector: Boolean get() = summary.isMixed
 }
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -45,22 +66,23 @@ class PortfolioViewModel @Inject constructor(
 
     private val range = MutableStateFlow(ChartRange.MONTH)
     private val scrubbed = MutableStateFlow<ChartPoint?>(null)
+    private val scope = MutableStateFlow(PortfolioScope.ALL)
 
-    private val history = range.flatMapLatest { r ->
-        portfolio.history(r.days)
-    }
+    private val history = combine(range, scope) { r, s -> r to s }
+        .flatMapLatest { (r, s) -> portfolio.history(r.days, s) }
 
     val state: StateFlow<PortfolioUiState> = combine(
         portfolio.summary,
         history,
         settings.settings,
-        range,
+        combine(range, scope) { r, s -> r to s },
         scrubbed,
-    ) { summary, points, cfg, r, scrub ->
+    ) { summary, points, cfg, (r, s), scrub ->
         PortfolioUiState(
             summary = summary,
             history = points.map { ChartPoint(it.day.dayToEpoch(), it.value.toDouble()) },
             range = r,
+            scope = s,
             advanced = cfg.advancedMode,
             hidden = cfg.hideBalances,
             compact = cfg.compactRows,
@@ -88,6 +110,11 @@ class PortfolioViewModel @Inject constructor(
     }
 
     fun setRange(r: ChartRange) { range.value = r }
+
+    fun setScope(s: PortfolioScope) {
+        scope.value = s
+        scrubbed.value = null
+    }
 
     fun onScrub(point: ChartPoint?) { scrubbed.value = point }
 

@@ -13,6 +13,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -42,10 +43,30 @@ fun MarketsScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
 
     Column(modifier = modifier.fillMaxWidth()) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 8.dp),
+        ) {
+            SearchScope.entries.forEach { scope ->
+                FilterChip(
+                    selected = scope == state.searchScope,
+                    onClick = { viewModel.setSearchScope(scope) },
+                    label = { Text(scope.label) },
+                )
+            }
+        }
+
         OutlinedTextField(
             value = state.query,
             onValueChange = viewModel::setQuery,
-            placeholder = { Text("Search coins") },
+            placeholder = {
+                Text(
+                    when (state.searchScope) {
+                        SearchScope.COINS -> "Search coins"
+                        SearchScope.STOCKS -> "Search shares, ETFs, funds"
+                    },
+                )
+            },
             leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
@@ -56,8 +77,14 @@ fun MarketsScreen(
 
         if (state.results.isEmpty()) {
             EmptyHint(
-                if (state.query.isBlank()) "Search for a coin to see its price."
-                else "Nothing found offline. Enable remote lookup in Settings to search the full list.",
+                when {
+                    state.searchScope == SearchScope.STOCKS && state.query.isBlank() ->
+                        "Search for a share, ETF or fund. Amsterdam and New York listings are separate."
+                    state.searchScope == SearchScope.STOCKS ->
+                        "Nothing found. Try the ticker, for example ASML.AS for Amsterdam."
+                    state.query.isBlank() -> "Search for a coin to see its price."
+                    else -> "Nothing found offline. Enable remote lookup in Settings to search the full list."
+                },
             )
         } else {
             LazyColumn(
@@ -103,7 +130,14 @@ private fun MarketRow(
                 maxLines = 1,
             )
         }
-        if (advanced && asset.rank != null) {
+        if (asset.assetClass == com.eddies.app.domain.AssetClass.STOCK) {
+            Text(
+                asset.id.substringAfter("stock:").substringBefore(":").replace('_', ' '),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(end = 10.dp),
+            )
+        } else if (advanced && asset.rank != null) {
             Text(
                 "#${asset.rank}",
                 style = MaterialTheme.typography.labelSmall,

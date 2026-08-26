@@ -158,6 +158,35 @@ fun SettingsScreen(
                 }
             }
             HorizontalDivider()
+            Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+                Text("Stock price key (optional)", style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    if (cfg.hasStockApiKey) "A key is saved and encrypted on this device."
+                    else "Shares work without this. Add a Finnhub key only if you want an " +
+                        "official source instead of the default, which is unofficial and could change.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.size(8.dp))
+                OutlinedTextField(
+                    value = state.stockKeyDraft,
+                    onValueChange = viewModel::setStockKeyDraft,
+                    placeholder = { Text("Paste key") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.size(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = viewModel::saveStockKey,
+                        enabled = state.stockKeyDraft.isNotBlank(),
+                    ) { Text("Save") }
+                    if (cfg.hasStockApiKey) {
+                        TextButton(onClick = viewModel::clearStockKey) { Text("Remove") }
+                    }
+                }
+            }
+            HorizontalDivider()
             SettingSwitch(
                 title = "Fetch missing coin icons",
                 subtitle = "Off by default. Turning this on tells the image host which coins you hold.",

@@ -7,6 +7,8 @@ import com.eddies.app.data.db.dao.WatchlistDao
 import com.eddies.app.data.db.entity.PriceLatestEntity
 import com.eddies.app.data.prefs.RealtimeFeed
 import com.eddies.app.data.prefs.SettingsDataStore
+import com.eddies.app.domain.AssetClass
+import com.eddies.app.domain.AssetIds
 import com.eddies.app.domain.PriceSourceId
 import com.eddies.app.domain.PriceTick
 import kotlinx.coroutines.CoroutineScope
@@ -51,6 +53,7 @@ class PriceRepository @Inject constructor(
     private val kraken: KrakenWsSource,
     private val binance: BinanceWsSource,
     private val aggregator: AggregatorSource,
+    private val stocks: com.eddies.app.data.stocks.StockPriceSource,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + kotlinx.coroutines.Dispatchers.IO)
 
@@ -109,17 +112,25 @@ class PriceRepository @Inject constructor(
         val tickers = assetDao.byIds(assetIds.toList())
             .associate { it.id to it.symbol }
 
+        // Split by class first. A crypto exchange has never heard of AAPL and
+        // Yahoo has no opinion on the long tail of tokens, so routing each class
+        // to its own ladder keeps both from wasting requests on the other's
+        // assets and from logging failures that are not failures.
+        val cryptoTickers = tickers.filterKeys { AssetIds.classOf(it) != AssetClass.STOCK }
+        val stockTickers = tickers.filterKeys { AssetIds.classOf(it) == AssetClass.STOCK }
+
         val realtime = when (feed) {
             RealtimeFeed.KRAKEN -> kraken
             RealtimeFeed.BINANCE -> binance
             RealtimeFeed.OFF -> null
         }
 
-        val liveSymbols = realtime?.resolve(tickers, baseCurrency).orEmpty()
+        val liveSymbols = realtime?.resolve(cryptoTickers, baseCurrency).orEmpty()
         // Whatever the exchange cannot quote falls to the aggregator. This is the
         // long tail: most coins are not listed on any single exchange.
-        val remaining = tickers.filterKeys { it !in liveSymbols.keys }
+        val remaining = cryptoTickers.filterKeys { it !in liveSymbols.keys }
         val pollSymbols = aggregator.resolve(remaining, baseCurrency)
+        val stockSymbols = stocks.resolve(stockTickers, baseCurrency)
 
         val emitMutex = kotlinx.coroutines.sync.Mutex()
         suspend fun publish(tick: PriceTick) {
@@ -140,6 +151,14 @@ class PriceRepository @Inject constructor(
         if (pollSymbols.isNotEmpty()) {
             launch {
                 aggregator.stream(pollSymbols).collect { tick ->
+                    publish(tick)
+                    persist(tick)
+                }
+            }
+        }
+        if (stockSymbols.isNotEmpty()) {
+            launch {
+                stocks.stream(stockSymbols).collect { tick ->
                     publish(tick)
                     persist(tick)
                 }

@@ -24,6 +24,15 @@ enum class TxType {
     STAKING_REWARD,
     AIRDROP,
     FEE,
+
+    /**
+     * Cash paid out for holding something. Changes no quantity and no cost
+     * basis, so it carries [Transaction.cashAmount] rather than a quantity.
+     *
+     * The stock-side twin of STAKING_REWARD: both are earned rather than bought,
+     * which is why the combined view can present them as one income figure.
+     */
+    DIVIDEND,
 }
 
 /** Where a row came from. Auto-imported rows carry an externalId for dedupe. */
@@ -51,7 +60,28 @@ data class Transaction(
     val note: String? = null,
     val source: TxSource = TxSource.MANUAL,
     val externalId: String? = null,
+    /** Cash received, for DIVIDEND rows. In [quoteCurrency]. */
+    val cashAmount: BigDecimal? = null,
 )
+
+/**
+ * A share split, as the exchange applied it.
+ *
+ * Held as an event and applied when folding, never by rewriting the ledger. A
+ * 4:1 split turns 10 shares into 40 and quarters the unit cost, leaving total
+ * basis untouched. Ignoring it makes a portfolio look like it lost 75 percent
+ * overnight; rewriting the ledger for it destroys what the user actually typed.
+ */
+data class SplitEvent(
+    val assetId: String,
+    val timestamp: Long,
+    val numerator: BigDecimal,
+    val denominator: BigDecimal,
+) {
+    /** 4:1 is a ratio of 4. A reverse 1:10 split is 0.1. */
+    val ratio: BigDecimal
+        get() = if (denominator.signum() == 0) BigDecimal.ONE else numerator.divide(denominator, MC)
+}
 
 /** How a disposal picks which acquisition it is disposing of. */
 enum class CostBasisMethod { AVERAGE, FIFO, LIFO, HIFO }

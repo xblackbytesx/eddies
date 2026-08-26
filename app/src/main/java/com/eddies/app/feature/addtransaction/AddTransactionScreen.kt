@@ -42,7 +42,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.eddies.app.core.ui.AssetIcon
-import com.eddies.app.data.repo.UserSelectableTxTypes
+
 import com.eddies.app.data.repo.label
 import com.eddies.app.domain.MoneyFormat
 import java.time.Instant
@@ -100,7 +100,7 @@ fun AddTransactionScreen(
             androidx.compose.foundation.layout.FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                UserSelectableTxTypes.forEach { type ->
+                state.availableTypes.forEach { type ->
                     FilterChip(
                         selected = state.type == type,
                         onClick = { viewModel.setType(type) },
@@ -109,6 +109,20 @@ fun AddTransactionScreen(
                 }
             }
         }
+
+        if (state.isCashOnly) {
+            // A dividend is cash received. Offering quantity and unit price here
+            // would invite a row that changes a share count it should not touch.
+            OutlinedTextField(
+                value = state.cashInput,
+                onValueChange = viewModel::setCash,
+                label = { Text("Cash received (${state.currency})") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                singleLine = true,
+                supportingText = { Text("Does not change how many shares you hold.") },
+                modifier = Modifier.fillMaxWidth(),
+            )
+        } else {
 
         // The amount, entered either way round.
         //
@@ -173,6 +187,8 @@ fun AddTransactionScreen(
             },
             modifier = Modifier.fillMaxWidth(),
         )
+
+        }
 
         OutlinedButton(onClick = { showDatePicker = true }, modifier = Modifier.fillMaxWidth()) {
             Text("Date: ${formatDate(state.timestamp)}")

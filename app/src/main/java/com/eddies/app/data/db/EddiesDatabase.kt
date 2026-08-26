@@ -9,6 +9,7 @@ import androidx.sqlite.execSQL
 import com.eddies.app.data.db.dao.AccountDao
 import com.eddies.app.data.db.dao.AssetDao
 import com.eddies.app.data.db.dao.AssetSourceRefDao
+import com.eddies.app.data.db.dao.CorporateActionDao
 import com.eddies.app.data.db.dao.CustodyDao
 import com.eddies.app.data.db.dao.StakingDao
 import com.eddies.app.data.db.dao.FxDao
@@ -24,6 +25,7 @@ import com.eddies.app.data.db.entity.FxRateEntity
 import com.eddies.app.data.db.entity.PortfolioSnapshotEntity
 import com.eddies.app.data.db.entity.PriceCandleEntity
 import com.eddies.app.data.db.entity.PriceLatestEntity
+import com.eddies.app.data.db.entity.SplitEventEntity
 import com.eddies.app.data.db.entity.StakingBalanceEntity
 import com.eddies.app.data.db.entity.TransactionEntity
 import com.eddies.app.data.db.entity.WatchlistEntity
@@ -46,11 +48,12 @@ import com.eddies.app.data.db.entity.WatchlistEntity
         PriceCandleEntity::class,
         AssetCustodyEntity::class,
         StakingBalanceEntity::class,
+        SplitEventEntity::class,
         FxRateEntity::class,
         PortfolioSnapshotEntity::class,
         WatchlistEntity::class,
     ],
-    version = 4,
+    version = 5,
     // Exported and committed, unlike the sibling projects.
     //
     // app/schemas/<db>/N.json holds the CREATE statements Room actually
@@ -71,6 +74,7 @@ abstract class EddiesDatabase : RoomDatabase() {
     abstract fun watchlistDao(): WatchlistDao
     abstract fun custodyDao(): CustodyDao
     abstract fun stakingDao(): StakingDao
+    abstract fun corporateActionDao(): CorporateActionDao
 
     companion object {
         const val NAME = "eddies.db"
@@ -143,6 +147,48 @@ abstract class EddiesDatabase : RoomDatabase() {
                         "`syncedAt` INTEGER NOT NULL, `error` TEXT, " +
                         "PRIMARY KEY(`stakeAddress`))",
                 )
+            }
+        }
+
+        /**
+         * v5: stocks. A cash column for dividends, a splits table, and an asset
+         * class on the daily snapshots.
+         *
+         * The snapshot table is rebuilt rather than altered, because SQLite
+         * cannot add a column to a primary key. Existing rows become CRYPTO,
+         * which is accurate: nothing but crypto existed before this version.
+         */
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(connection: SQLiteConnection) {
+                connection.execSQL("ALTER TABLE `transactions` ADD COLUMN `cashAmount` TEXT")
+
+                connection.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `corporate_actions` (" +
+                        "`assetId` TEXT NOT NULL, `timestamp` INTEGER NOT NULL, " +
+                        "`numerator` TEXT NOT NULL, `denominator` TEXT NOT NULL, " +
+                        "`fetchedAt` INTEGER NOT NULL, " +
+                        "PRIMARY KEY(`assetId`, `timestamp`))",
+                )
+                connection.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_corporate_actions_assetId` " +
+                        "ON `corporate_actions` (`assetId`)",
+                )
+
+                connection.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `portfolio_snapshots_new` (" +
+                        "`day` TEXT NOT NULL, `assetClass` TEXT NOT NULL, " +
+                        "`totalValue` TEXT NOT NULL, `costBasis` TEXT NOT NULL, " +
+                        "`currency` TEXT NOT NULL, `takenAt` INTEGER NOT NULL, " +
+                        "PRIMARY KEY(`day`, `assetClass`))",
+                )
+                connection.execSQL(
+                    "INSERT INTO `portfolio_snapshots_new` " +
+                        "(`day`, `assetClass`, `totalValue`, `costBasis`, `currency`, `takenAt`) " +
+                        "SELECT `day`, CRYPTO, `totalValue`, `costBasis`, `currency`, `takenAt` " +
+                        "FROM `portfolio_snapshots`",
+                )
+                connection.execSQL("DROP TABLE `portfolio_snapshots`")
+                connection.execSQL("ALTER TABLE `portfolio_snapshots_new` RENAME TO `portfolio_snapshots`")
             }
         }
     }

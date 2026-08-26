@@ -63,6 +63,65 @@ fun InsightsScreen(
     ) {
         Spacer(Modifier.size(4.dp))
 
+        // Only when there is something to combine. With one class this would be
+        // a section restating the number directly above it.
+        if (state.perClass.size > 1) {
+            Section(
+                title = "Crypto and stocks",
+                subtitle = "Every class, side by side.",
+            ) {
+                state.perClass.forEachIndexed { i, totals ->
+                    if (i > 0) HorizontalDivider()
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                totals.assetClass.name.lowercase().replaceFirstChar(Char::uppercase),
+                                style = MaterialTheme.typography.bodyLarge,
+                            )
+                            Text(
+                                "${totals.holdings} holding${if (totals.holdings == 1) "" else "s"}" +
+                                    if (totals.income.signum() > 0)
+                                        ", ${MoneyFormat.fiat(totals.income, currency, state.hidden)} earned"
+                                    else "",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text(
+                                MoneyFormat.fiat(totals.value, currency, state.hidden),
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                            PnlText(
+                                text = MoneyFormat.percent(totals.pnlPct, state.hidden),
+                                value = totals.unrealizedPnl,
+                                style = MaterialTheme.typography.labelSmall,
+                                showArrow = false,
+                            )
+                        }
+                    }
+                }
+                HorizontalDivider()
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        "Combined",
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Text(
+                        MoneyFormat.fiat(state.summary.totalValue, currency, state.hidden),
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                }
+            }
+        }
+
         Section("Allocation") {
             Box(
                 modifier = Modifier.fillMaxWidth().height(200.dp).padding(16.dp),
