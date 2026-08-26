@@ -9,15 +9,19 @@ import androidx.compose.runtime.getValue
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.eddies.app.core.design.EddiesTheme
+import com.eddies.app.core.ui.WindowSecurityPolicy
 import com.eddies.app.navigation.EddiesNavHost
 import com.eddies.app.navigation.RootViewModel
 import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
 import androidx.activity.viewModels
 
 @AndroidEntryPoint
 class MainActivity : FragmentActivity() {
 
     private val rootViewModel: RootViewModel by viewModels()
+
+    @Inject lateinit var windowSecurity: WindowSecurityPolicy
 
     override fun onCreate(savedInstanceState: Bundle?) {
         val splash = installSplashScreen()
@@ -31,8 +35,11 @@ class MainActivity : FragmentActivity() {
             val state by rootViewModel.state.collectAsStateWithLifecycle()
 
             // Keeps balances out of the recents thumbnail. Applied from state so
-            // toggling the setting takes effect without a restart.
-            applySecureFlag(state.hideInRecents)
+            // toggling the setting takes effect without a restart. The policy is
+            // chosen at build time: the demo build never secures the window,
+            // because FLAG_SECURE blocks screenshots and taking them is the only
+            // reason that build exists.
+            applySecureFlag(windowSecurity.shouldSecureWindow(state.hideInRecents))
 
             EddiesTheme(themeMode = state.themeMode, dynamicColor = state.dynamicColor) {
                 EddiesNavHost(locked = state.locked, onUnlocked = rootViewModel::onUnlocked)

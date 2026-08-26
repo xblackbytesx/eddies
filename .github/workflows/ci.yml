@@ -83,6 +83,12 @@ jobs:
       - name: Demo flavour still builds
         run: gradle --no-daemon :app:assembleDemoDebug
 
+      # Proves the demo build carries no real-app code and vice versa. The claim
+      # is not that demo code is unreachable in a release, it is that it is not
+      # in the APK at all, and that only holds if something checks.
+      - name: Flavours are cleanly separated
+        run: ./scripts/verify-flavours.sh
+
       - name: Upload reports on failure
         if: failure()
         uses: actions/upload-artifact@v4
