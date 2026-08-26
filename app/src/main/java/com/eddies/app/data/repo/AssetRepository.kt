@@ -39,7 +39,7 @@ private data class SeedEntry(
  */
 @Singleton
 class AssetRepository @Inject constructor(
-    @ApplicationContext private val context: Context,
+    @param:ApplicationContext private val context: Context,
     private val assetDao: AssetDao,
     private val settings: SettingsDataStore,
     private val aggregator: AggregatorSource,

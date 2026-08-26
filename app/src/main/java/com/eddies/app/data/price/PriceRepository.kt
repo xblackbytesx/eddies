@@ -43,7 +43,10 @@ import javax.inject.Singleton
  * five seconds later, and they reopen on return. There is no pause/resume code
  * to get wrong, and a backgrounded app holds no connection.
  */
-@OptIn(ExperimentalCoroutinesApi::class)
+// FlowPreview is for sample(), which throttles the feed. It has been preview for
+// years and is the standard way to rate-limit a Flow; the alternative is
+// hand-rolling the same thing with a timer.
+@OptIn(ExperimentalCoroutinesApi::class, kotlinx.coroutines.FlowPreview::class)
 @Singleton
 class PriceRepository @Inject constructor(
     private val transactionDao: TransactionDao,

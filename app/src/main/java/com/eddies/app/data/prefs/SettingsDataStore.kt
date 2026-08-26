@@ -81,7 +81,7 @@ data class AppSettings(
 
 @Singleton
 class SettingsDataStore @Inject constructor(
-    @ApplicationContext private val context: Context,
+    @param:ApplicationContext private val context: Context,
     private val secrets: SecretStore,
 ) {
     private object Keys {

@@ -22,7 +22,7 @@ import javax.inject.Singleton
  * undecryptable on a new phone. See core/backup/BackupCrypto.
  */
 @Singleton
-class SecretStore @Inject constructor(@ApplicationContext private val context: Context) {
+class SecretStore @Inject constructor(@param:ApplicationContext private val context: Context) {
 
     private val aead: Aead by lazy {
         AeadConfig.register()
