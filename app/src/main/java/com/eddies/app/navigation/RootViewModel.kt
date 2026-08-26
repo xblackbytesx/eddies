@@ -41,6 +41,7 @@ class RootViewModel @Inject constructor(
     private val fx: FxRepository,
     private val work: WorkScheduler,
     private val staking: StakingRepository,
+    private val transactions: com.eddies.app.data.repo.TransactionRepository,
     private val demoSeeder: DemoSeeder,
 ) : ViewModel() {
 
@@ -66,6 +67,16 @@ class RootViewModel @Inject constructor(
 
             assets.ensureSeeded()
             fx.refreshIfStale()
+            // Cover the ledger, not just today. A transaction priced in another
+            // currency has no cost basis at all without a rate for its own date.
+            runCatching {
+                transactions.earliestTimestamp()?.let { earliest ->
+                    fx.ensureHistoryFrom(
+                        java.time.Instant.ofEpochMilli(earliest)
+                            .atZone(java.time.ZoneOffset.UTC).toLocalDate().toString(),
+                    )
+                }
+            }
             work.ensureScheduled()
             // Cheap and idempotent: one request per staking address, and none
             // at all when no account has one.

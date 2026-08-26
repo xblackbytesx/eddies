@@ -38,3 +38,27 @@ class FiatConverter(
         val Identity = FiatConverter(emptyMap())
     }
 }
+
+/**
+ * Picking the rate that was in force on a given day.
+ *
+ * Pure and separate from the repository so the three cases can be tested. They
+ * are easy to get subtly wrong and the failure is a plausible-looking wrong
+ * number rather than a crash.
+ */
+object HistoricalRates {
+
+    /**
+     * The rate published on or before [day].
+     *
+     * Weekends and holidays have no publication, so a Saturday resolves to the
+     * preceding Friday. A day before the earliest known publication returns
+     * null, meaning "unknown", never the oldest rate held: valuing a 2024
+     * purchase at a 2026 rate produces a wrong cost basis that looks entirely
+     * plausible, whereas unknown degrades to no basis and is visible.
+     *
+     * [byDay] must be sorted ascending by day.
+     */
+    fun onOrBefore(byDay: List<Pair<String, java.math.BigDecimal>>, day: String): java.math.BigDecimal? =
+        byDay.lastOrNull { it.first <= day }?.second
+}

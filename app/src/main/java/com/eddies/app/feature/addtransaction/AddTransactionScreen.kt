@@ -190,6 +190,37 @@ fun AddTransactionScreen(
 
         }
 
+        // The currency the trade was priced in, which is not always the one the
+        // portfolio is kept in: a share quoted in dollars can be paid for in euro.
+        if (state.availableCurrencies.size > 1) {
+            Column {
+                Text("Priced in", style = MaterialTheme.typography.labelMedium)
+                Spacer(Modifier.size(6.dp))
+                androidx.compose.foundation.layout.FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    state.availableCurrencies.forEach { code ->
+                        FilterChip(
+                            selected = state.currency == code,
+                            onClick = { viewModel.setCurrency(code) },
+                            label = { Text(code) },
+                        )
+                    }
+                }
+                state.convertedPreview?.let { converted ->
+                    Spacer(Modifier.size(6.dp))
+                    Text(
+                        "About ${MoneyFormat.fiat(converted, state.baseCurrency)} at the rate on " +
+                            "${formatDate(state.timestamp)}. If you know what you were actually " +
+                            "charged, enter that in ${state.baseCurrency} instead: it includes your " +
+                            "broker's FX spread, and this does not.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+
         OutlinedButton(onClick = { showDatePicker = true }, modifier = Modifier.fillMaxWidth()) {
             Text("Date: ${formatDate(state.timestamp)}")
         }

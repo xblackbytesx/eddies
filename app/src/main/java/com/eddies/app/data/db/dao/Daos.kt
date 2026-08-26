@@ -223,6 +223,9 @@ interface FxDao {
 
     @Query("SELECT MAX(day) FROM fx_rates")
     suspend fun latestDay(): String?
+
+    @Query("SELECT MIN(day) FROM fx_rates")
+    suspend fun earliestDay(): String?
 }
 
 @Dao

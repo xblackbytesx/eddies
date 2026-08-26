@@ -77,8 +77,15 @@ class FxRepository @Inject constructor(
         val rows = byQuote[currency] ?: return null
         // The rate in force on a date is the last one published on or before it:
         // weekends and holidays have no publication and must not read as a gap.
-        val row = rows.lastOrNull { it.day <= day } ?: rows.firstOrNull() ?: return null
-        return runCatching { BigDecimal(row.rate) }.getOrNull()
+        //
+        // If nothing was published on or before it, the answer is "unknown", not
+        // "the oldest rate we happen to hold". Falling back used to value a 2024
+        // purchase at a 2026 rate, which is a wrong cost basis that looks
+        // perfectly plausible. Unknown degrades to no basis, which is visible.
+        return com.eddies.app.domain.HistoricalRates.onOrBefore(
+            rows.mapNotNull { r -> runCatching { r.day to BigDecimal(r.rate) }.getOrNull() },
+            day,
+        )
     }
 
     /** A single current rate, for converting a fetched candle series. */
@@ -93,6 +100,49 @@ class FxRepository @Inject constructor(
         )
         return table.rate(from.uppercase(), to.uppercase())
     }
+
+    /**
+     * Makes sure rates exist back to [earliestNeeded], which is normally the date
+     * of the oldest transaction.
+     *
+     * Without this, a purchase made in a currency other than the base one has no
+     * rate for its own date and gets no cost basis at all. Frankfurter serves a
+     * whole range in one request, so covering years of ledger is a single call.
+     *
+     * Asking for a weekend is safe: the API answers with the last publication
+     * before it, which is exactly the rate that was in force.
+     */
+    suspend fun ensureHistoryFrom(earliestNeeded: String) {
+        val have = fxDao.earliestDay()
+        if (have != null && have <= earliestNeeded) return
+        // Fetch a little before the earliest need, so the first transaction is
+        // not sitting exactly on the boundary of what is known.
+        val from = runCatching {
+            java.time.LocalDate.parse(earliestNeeded).minusDays(7).toString()
+        }.getOrDefault(earliestNeeded)
+        runCatching { fetchRange(from, todayIso()) }
+    }
+
+    private suspend fun fetchRange(from: String, to: String) {
+        val body = http.get("https://api.frankfurter.dev/v1/$from..$to") {
+            parameter("base", PIVOT)
+            parameter("symbols", SUPPORTED.joinToString(","))
+        }.bodyAsText()
+
+        val rates = json.parseToJsonElement(body).jsonObject["rates"]?.jsonObject ?: return
+        val rows = ArrayList<FxRateEntity>()
+        for ((day, perDay) in rates) {
+            val quotes = perDay as? kotlinx.serialization.json.JsonObject ?: continue
+            for ((quote, value) in quotes) {
+                value.asBigDecimal()?.let {
+                    rows += FxRateEntity(quote = quote, day = day, rate = it.toPlainString())
+                }
+            }
+        }
+        if (rows.isNotEmpty()) fxDao.upsert(rows)
+    }
+
+    private fun todayIso(): String = dayOf(System.currentTimeMillis())
 
     /** Fetches today's rates if the cache is older than a day. Safe to call often. */
     suspend fun refreshIfStale(force: Boolean = false) {
