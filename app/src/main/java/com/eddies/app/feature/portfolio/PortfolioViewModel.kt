@@ -42,6 +42,14 @@ data class PortfolioUiState(
     val secondaryTotal: java.math.BigDecimal? = null,
     val secondaryCurrency: String = "",
     val onboarded: Boolean = false,
+    /**
+     * False until the database has actually answered.
+     *
+     * The default state of this class is indistinguishable from a real empty
+     * portfolio, so without this a populated database rendered "nothing here
+     * yet" and a total of zero for a frame on every cold start.
+     */
+    val loaded: Boolean = false,
 ) {
     /** Only what the selected scope covers. */
     val holdings: List<Holding> get() = summary.holdings.filter { scope.matches(it.asset.id) }
@@ -105,6 +113,7 @@ class PortfolioViewModel @Inject constructor(
                 ),
             secondaryCurrency = cfg.secondaryCurrency,
             onboarded = cfg.onboarded,
+            loaded = true,
             advanced = cfg.advancedMode,
             hidden = cfg.hideBalances,
             compact = cfg.compactRows,

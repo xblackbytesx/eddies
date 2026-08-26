@@ -33,6 +33,8 @@ data class TransactionsUiState(
     val filter: TxType? = null,
     val hidden: Boolean = false,
     val total: Int = 0,
+    /** False until the database has answered. See PortfolioUiState.loaded. */
+    val loaded: Boolean = false,
 ) {
     val isEmpty: Boolean get() = months.isEmpty()
 }
@@ -73,6 +75,7 @@ class TransactionsViewModel @Inject constructor(
             filter = type,
             hidden = cfg.hideBalances,
             total = txs.size,
+            loaded = true,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), TransactionsUiState())
 
