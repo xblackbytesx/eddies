@@ -7,7 +7,11 @@ import com.eddies.app.data.prefs.SettingsDataStore
 import com.eddies.app.data.price.AggregatorSource
 import com.eddies.app.domain.Asset
 import com.eddies.app.domain.AssetClass
+import com.eddies.app.data.db.entity.AssetSourceRefEntity
+import com.eddies.app.data.stocks.TradegateSource
 import com.eddies.app.domain.AssetIds
+import com.eddies.app.domain.Isin
+import com.eddies.app.domain.PriceSourceId
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -40,6 +44,8 @@ class AssetRepository @Inject constructor(
     private val settings: SettingsDataStore,
     private val aggregator: AggregatorSource,
     private val yahoo: com.eddies.app.data.stocks.YahooApi,
+    private val tradegate: com.eddies.app.data.stocks.TradegateSource,
+    private val sourceRefDao: com.eddies.app.data.db.dao.AssetSourceRefDao,
     private val json: Json,
 ) {
 
@@ -114,6 +120,38 @@ class AssetRepository @Inject constructor(
         return results
     }
 
+    /**
+     * Confirms Tradegate lists the ISIN, names it via Yahoo, and records both
+     * source refs so live prices and history can come from different places.
+     */
+    suspend fun resolveTradegate(isin: String): TradegateLookup {
+        val quote = tradegate.quote(isin) ?: return TradegateLookup.NotListed
+
+        val id = AssetIds.stock(TradegateSource.EXCHANGE, isin)
+        // Yahoo search accepts an ISIN and answers with the listing, which is
+        // where the human-readable name comes from. If it is down we still have
+        // a tradeable instrument and a price, so the ISIN stands in as the name.
+        val match = runCatching { yahoo.search(isin, limit = 1) }.getOrNull()?.firstOrNull()
+
+        val asset = Asset(
+            id = id,
+            assetClass = AssetClass.STOCK,
+            symbol = match?.symbol ?: isin,
+            name = match?.name ?: isin,
+            decimals = 4,
+        )
+        assetDao.upsert(asset.toEntity(tracked = true))
+
+        val refs = mutableListOf(
+            AssetSourceRefEntity(id, PriceSourceId.TRADEGATE, isin, TradegateSource.CURRENCY),
+        )
+        // The Yahoo symbol is what the charts and the split history hang off.
+        match?.symbol?.let { refs += AssetSourceRefEntity(id, PriceSourceId.YAHOO, it, null) }
+        runCatching { sourceRefDao.upsert(refs) }
+
+        return TradegateLookup.Found(asset, quote.last)
+    }
+
     suspend fun setTracked(assetId: String, tracked: Boolean) = assetDao.setTracked(assetId, tracked)
 
     /**
@@ -155,3 +193,31 @@ internal fun Asset.toEntity(tracked: Boolean = false) = AssetEntity(
     rank = rank,
     tracked = tracked,
 )
+
+/**
+ * Looks up an instrument on Tradegate by ISIN.
+ *
+ * Kept separate from the ticker search because Tradegate has no search endpoint
+ * and no ticker: it is keyed by ISIN only. That matches how a European broker
+ * statement reads anyway, so pasting the ISIN is the natural act rather than a
+ * workaround.
+ *
+ * Two calls, both of which have to work for the result to be useful: Tradegate
+ * confirms it actually lists the instrument and gives a live price, and Yahoo
+ * resolves the ISIN to a name and a symbol. That symbol is stored as a source
+ * ref so charts and splits can come from Yahoo, since Tradegate serves a
+ * snapshot and no history at all.
+ */
+suspend fun AssetRepository.lookupTradegate(rawIsin: String): TradegateLookup {
+    val isin = Isin.normalise(rawIsin)
+    if (!Isin.looksLikeIsin(isin)) return TradegateLookup.Invalid("That is not an ISIN. They look like NL0010273215.")
+    if (!Isin.isValid(isin)) return TradegateLookup.Invalid("That ISIN's check digit is wrong. Check for a typo.")
+    return resolveTradegate(isin)
+}
+
+sealed interface TradegateLookup {
+    data class Found(val asset: Asset, val price: java.math.BigDecimal) : TradegateLookup
+    data class Invalid(val reason: String) : TradegateLookup
+    data object NotListed : TradegateLookup
+    data object Unreachable : TradegateLookup
+}

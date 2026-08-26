@@ -177,6 +177,47 @@ license that data. Everything free is delayed or end of day, so the stock source
 is a poller, quotes carry `stale` when the market is shut, and polling backs off
 to fifteen minutes while every held market is closed.
 
+### Tradegate, for instruments held on it
+
+`www.tradegatebsx.com/refresh.php?isin=<ISIN>`, keyless, JSON, quoted in euros.
+(`www.tradegate.de` 301s to that host; use the final one so nothing depends on
+following a cross-host redirect.)
+
+Tradegate exists here because **Yahoo does not cover it**. Every other German
+venue has a suffix (`.DE` XETRA, `.F` Frankfurt, `.SG` Stuttgart, `.MU`, `.DU`,
+`.HM`, `.HA`), but `.TG` returns nothing, so a position genuinely held on
+Tradegate cannot be priced through the normal stock path.
+
+**The response mixes number types, and this is the trap.** The same field is a
+JSON number for one instrument and a German comma-decimal string for another,
+apparently whenever the value would end in a trailing zero:
+
+    SAP    "last":180.38       a number
+    ASML   "last":"1501,60"    a string, comma decimal
+
+Measured across four instruments, two came back as comma-strings, and it is not
+confined to high and low: bid, ask and last all do it. `BigDecimal("1501,60")`
+throws, the tick is dropped, and the holding shows **no price at all**, silently
+and only for some instruments. Every value therefore goes through
+`GermanNumber.parse`, which also strips a thousands separator: reading the dot in
+"1.501,60" as a decimal point understates a holding a thousandfold.
+
+An unlisted ISIN returns an **empty body**, not an error object.
+
+The payload carries `refresh`, Tradegate's own suggested cadence in seconds (10
+at the time of writing). `TradegateSource` honours it rather than guessing.
+
+**No history.** It is a live snapshot only, so charts for a Tradegate holding
+come from the same instrument's Yahoo listing, resolved by ISIN when the asset is
+added and stored in `asset_source_refs`. Yahoo returns exactly one listing per
+ISIN, so there is no choosing a euro-denominated one: `IE00B4L5Y983` resolves to
+`IWDA.L` in London. The chart is converted to the base currency but is a
+different venue's prints, and the asset detail screen says so rather than letting
+the chart quietly disagree with the live price above it.
+
+Asset ids are `stock:TRADEGATE:<ISIN>`. Tradegate has no tickers, which is why it
+gets its own search tab: a name query could never work there.
+
 ### Koios, for Cardano staking
 
 `api.koios.rest`, public tier keyless at 5000 requests a day. A sync is one
@@ -268,6 +309,13 @@ and `stakingQuantity` falls out of the fold rather than needing its own bookkeep
 **Room migrations are explicit and never destructive.** Unlike a cache of
 something a server owns, a transaction typed in by hand has no other copy.
 `fallbackToDestructiveMigration` would destroy the only one.
+
+**A venue with its own prices is its own listing.** `stock:TRADEGATE:<ISIN>` is
+not the same asset as `stock:AMSTERDAM:ASML.AS`: the prices genuinely differ, and
+that is where the shares actually are. `asset_source_refs` carries both the
+Tradegate ISIN and the Yahoo symbol for one asset, which is what lets live prices
+and history come from different places. That table has existed since v1 for
+exactly this and went unused until Tradegate needed it.
 
 **Migration SQL is verified by executing it, not by reading it.**
 `scripts/verify-migrations.sh` extracts every `execSQL` string **from the source
@@ -490,12 +538,18 @@ cut that to roughly 1.1 MB. Re-run on a machine with `cwebp` installed.
    derived from the same holdings as the whole, so a per-class total and the
    grand total can never disagree.
 
-6. **Parked.** Dividend reinvestment (DRIP), where a dividend buys shares rather
+6. **Done. Tradegate.** A German venue Yahoo does not carry, added as its own
+   price source keyed by ISIN. Live prices from Tradegate, history and splits
+   from the same instrument's Yahoo listing via `asset_source_refs`. ISINs are
+   check-digit validated locally so a typo is caught before a request goes out
+   and the message can say "typo" rather than "not found".
+
+7. **Parked.** Dividend reinvestment (DRIP), where a dividend buys shares rather
    than paying cash. It needs per-position reinvestment settings and
    reconciliation against what the broker actually did, and the ledger already
    represents it as a DIVIDEND plus a BUY for anyone who wants it today.
 
-**Present a short plan before starting 6.** Milestones get agreed before
+**Present a short plan before starting 7.** Milestones get agreed before
 they get built, not after.
 
 ## Verified in the sandbox, 2026-08-25

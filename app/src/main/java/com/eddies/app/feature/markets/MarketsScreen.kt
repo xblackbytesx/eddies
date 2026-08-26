@@ -64,6 +64,7 @@ fun MarketsScreen(
                     when (state.searchScope) {
                         SearchScope.COINS -> "Search coins"
                         SearchScope.STOCKS -> "Search shares, ETFs, funds"
+                        SearchScope.TRADEGATE -> "Paste an ISIN, e.g. NL0010273215"
                     },
                 )
             },
@@ -75,9 +76,23 @@ fun MarketsScreen(
             LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
         }
 
+        // Tradegate reports why a lookup failed, which is more use than an
+        // empty list: a typo and an unlisted instrument need different fixes.
+        state.tradegateStatus?.let { status ->
+            Text(
+                status,
+                style = MaterialTheme.typography.bodySmall,
+                color = if (state.results.isEmpty()) MaterialTheme.colorScheme.error
+                else MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+            )
+        }
+
         if (state.results.isEmpty()) {
             EmptyHint(
                 when {
+                    state.searchScope == SearchScope.TRADEGATE ->
+                        "Tradegate is keyed by ISIN, not by ticker. Your broker statement lists them."
                     state.searchScope == SearchScope.STOCKS && state.query.isBlank() ->
                         "Search for a share, ETF or fund. Amsterdam and New York listings are separate."
                     state.searchScope == SearchScope.STOCKS ->

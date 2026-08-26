@@ -109,6 +109,8 @@ class StockHistorySource @Inject constructor(
         currency: String,
         since: Long?,
     ): CandleSeries? {
+        // Covers Tradegate holdings too: the caller resolves those to a Yahoo
+        // symbol first, since Tradegate has no history of its own.
         if (AssetIds.classOf(assetId) != AssetClass.STOCK) return null
 
         // Yahoo takes a range rather than a start, and intraday history is only
