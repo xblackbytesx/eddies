@@ -6,6 +6,7 @@ import com.eddies.app.core.design.ThemeMode
 import com.eddies.app.data.prefs.SettingsDataStore
 import com.eddies.app.data.price.FxRepository
 import com.eddies.app.data.repo.AssetRepository
+import com.eddies.app.data.staking.StakingRepository
 import com.eddies.app.work.WorkScheduler
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -38,6 +39,7 @@ class RootViewModel @Inject constructor(
     private val assets: AssetRepository,
     private val fx: FxRepository,
     private val work: WorkScheduler,
+    private val staking: StakingRepository,
 ) : ViewModel() {
 
     private val unlocked = MutableStateFlow(false)
@@ -59,6 +61,9 @@ class RootViewModel @Inject constructor(
             assets.ensureSeeded()
             fx.refreshIfStale()
             work.ensureScheduled()
+            // Cheap and idempotent: one request per staking address, and none
+            // at all when no account has one.
+            runCatching { staking.syncAll() }
         }
     }
 

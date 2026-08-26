@@ -10,6 +10,7 @@ import com.eddies.app.data.db.dao.AccountDao
 import com.eddies.app.data.db.dao.AssetDao
 import com.eddies.app.data.db.dao.AssetSourceRefDao
 import com.eddies.app.data.db.dao.CustodyDao
+import com.eddies.app.data.db.dao.StakingDao
 import com.eddies.app.data.db.dao.FxDao
 import com.eddies.app.data.db.dao.PortfolioSnapshotDao
 import com.eddies.app.data.db.dao.PriceDao
@@ -23,6 +24,7 @@ import com.eddies.app.data.db.entity.FxRateEntity
 import com.eddies.app.data.db.entity.PortfolioSnapshotEntity
 import com.eddies.app.data.db.entity.PriceCandleEntity
 import com.eddies.app.data.db.entity.PriceLatestEntity
+import com.eddies.app.data.db.entity.StakingBalanceEntity
 import com.eddies.app.data.db.entity.TransactionEntity
 import com.eddies.app.data.db.entity.WatchlistEntity
 
@@ -43,11 +45,12 @@ import com.eddies.app.data.db.entity.WatchlistEntity
         PriceLatestEntity::class,
         PriceCandleEntity::class,
         AssetCustodyEntity::class,
+        StakingBalanceEntity::class,
         FxRateEntity::class,
         PortfolioSnapshotEntity::class,
         WatchlistEntity::class,
     ],
-    version = 3,
+    version = 4,
     // Exported and committed, unlike the sibling projects.
     //
     // app/schemas/<db>/N.json holds the CREATE statements Room actually
@@ -67,6 +70,7 @@ abstract class EddiesDatabase : RoomDatabase() {
     abstract fun portfolioSnapshotDao(): PortfolioSnapshotDao
     abstract fun watchlistDao(): WatchlistDao
     abstract fun custodyDao(): CustodyDao
+    abstract fun stakingDao(): StakingDao
 
     companion object {
         const val NAME = "eddies.db"
@@ -124,6 +128,20 @@ abstract class EddiesDatabase : RoomDatabase() {
                         "`assetId` TEXT NOT NULL, `type` TEXT NOT NULL, " +
                         "`label` TEXT NOT NULL, `note` TEXT, " +
                         "`updatedAt` INTEGER NOT NULL, PRIMARY KEY(`assetId`))",
+                )
+            }
+        }
+
+        /** v4: staking_balances, the live per-address staking figures. Additive. */
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(connection: SQLiteConnection) {
+                connection.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `staking_balances` (" +
+                        "`stakeAddress` TEXT NOT NULL, `assetId` TEXT NOT NULL, " +
+                        "`accountId` INTEGER NOT NULL, `pending` TEXT NOT NULL, " +
+                        "`totalEarned` TEXT NOT NULL, `poolId` TEXT, " +
+                        "`syncedAt` INTEGER NOT NULL, `error` TEXT, " +
+                        "PRIMARY KEY(`stakeAddress`))",
                 )
             }
         }

@@ -6,6 +6,9 @@ import com.eddies.app.data.db.entity.PortfolioSnapshotEntity
 import com.eddies.app.data.prefs.SettingsDataStore
 import com.eddies.app.data.price.FxRepository
 import com.eddies.app.data.price.PriceRepository
+import com.eddies.app.data.staking.StakingRepository
+import com.eddies.app.data.staking.StakingTotals
+import com.eddies.app.domain.FxTable
 import com.eddies.app.domain.PortfolioBuilder
 import com.eddies.app.domain.PortfolioSummary
 import com.eddies.app.domain.Transaction
@@ -41,15 +44,22 @@ class PortfolioRepository @Inject constructor(
     private val fx: FxRepository,
     private val settings: SettingsDataStore,
     private val snapshotDao: PortfolioSnapshotDao,
+    private val staking: StakingRepository,
 ) {
+
+    // FX and staking are paired first because combine only has typed overloads
+    // up to five flows; a sixth silently falls back to the vararg form and every
+    // parameter arrives as Any.
+    private val rates: Flow<Pair<FxTable, StakingTotals>> =
+        combine(fx.historicalTableFlow(), staking.totals) { table, totals -> table to totals }
 
     val summary: Flow<PortfolioSummary> = combine(
         transactions.observeAll(),
         prices.prices,
         settings.settings,
         assetDao.observeAll(),
-        fx.historicalTableFlow(),
-    ) { txs, priceMap, cfg, assetRows, fxTable ->
+        rates,
+    ) { txs, priceMap, cfg, assetRows, (fxTable, stakingTotals) ->
         val assets = assetRows.associate { it.id to it.toDomain() }
         PortfolioBuilder.build(
             transactions = txs,
@@ -59,6 +69,7 @@ class PortfolioRepository @Inject constructor(
             method = cfg.costBasisMethod,
             fx = fxTable,
             includeFeesInBasis = cfg.includeFeesInBasis,
+            stakingPending = stakingTotals.pendingByAsset,
         )
     }.flowOn(kotlinx.coroutines.Dispatchers.Default)
 

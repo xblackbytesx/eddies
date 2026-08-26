@@ -24,10 +24,32 @@ data class Holding(
     val position: PositionSnapshot,
     val price: PriceTick?,
     val currency: String,
+    /**
+     * Outstanding staking rewards read from the chain, on top of what the ledger
+     * says. Not a ledger row: rewards accrue continuously and are withdrawn in
+     * lumps, so this is a balance that gets replaced, not appended to.
+     */
+    val stakingPending: BigDecimal = BigDecimal.ZERO,
 ) {
-    val marketValue: BigDecimal = price?.let { position.quantity * it.price } ?: BigDecimal.ZERO
+    /** What is actually held: recorded transactions plus what is still accruing. */
+    val totalQuantity: BigDecimal = position.quantity + stakingPending
+
+    val marketValue: BigDecimal = price?.let { totalQuantity * it.price } ?: BigDecimal.ZERO
     val unrealizedPnl: BigDecimal = if (price == null) BigDecimal.ZERO else marketValue - position.costBasis
-    val stakingValue: BigDecimal = price?.let { position.stakingQuantity * it.price } ?: BigDecimal.ZERO
+
+    /**
+     * Fiat value of everything earned rather than bought: rewards still accruing
+     * on chain, plus any recorded as transactions.
+     *
+     * Valued at today's price, not at what it was worth when it accrued. The
+     * question this answers is "how much of my ADA did I earn", not "what was my
+     * income in 2021", so a historical basis would be precision nobody asked for.
+     */
+    val stakingValue: BigDecimal =
+        price?.let { (position.stakingQuantity + stakingPending) * it.price } ?: BigDecimal.ZERO
+
+    val stakingQuantityTotal: BigDecimal = position.stakingQuantity + stakingPending
+    val hasPendingStaking: Boolean = stakingPending.signum() > 0
     val hasPrice: Boolean = price != null
     val isStale: Boolean = price?.stale ?: true
 
@@ -90,8 +112,14 @@ object PortfolioBuilder {
         method: CostBasisMethod = CostBasisMethod.AVERAGE,
         fx: FxTable = IdentityFx,
         includeFeesInBasis: Boolean = true,
+        /** Outstanding staking rewards per asset, read from the chain. */
+        stakingPending: Map<String, BigDecimal> = emptyMap(),
     ): PortfolioSummary {
-        val byAsset = transactions.groupBy { it.assetId }
+        // A coin can be staked without any recorded transaction, so the asset set
+        // is the union. Keying only off the ledger would hide a holding that
+        // exists entirely as accrued rewards.
+        val byAsset = (transactions.groupBy { it.assetId }.keys + stakingPending.keys)
+            .associateWith { id -> transactions.filter { it.assetId == id } }
         val holdings = byAsset.mapNotNull { (assetId, txs) ->
             val asset = assets[assetId] ?: return@mapNotNull null
             val position = PositionCalculator.fold(
@@ -107,7 +135,13 @@ object PortfolioBuilder {
                 else fx.rate(tick.currency, currency, tick.at)
                     ?.let { tick.copy(price = tick.price * it, currency = currency) }
             }
-            Holding(asset, position, price, currency)
+            Holding(
+                asset = asset,
+                position = position,
+                price = price,
+                currency = currency,
+                stakingPending = stakingPending[assetId] ?: BigDecimal.ZERO,
+            )
         }
             // A fully sold position still carries realized P/L, so it is kept in
             // the totals but sorted below anything currently held.
