@@ -31,6 +31,17 @@ data class PortfolioUiState(
     val hidden: Boolean = false,
     val compact: Boolean = false,
     val scrubbed: ChartPoint? = null,
+    /**
+     * The same total in the user's second currency, or null when they have not
+     * chosen one, it matches the main one, or no rate is known.
+     *
+     * Null rather than falling back to the main currency: showing the same
+     * number twice under two different symbols would be worse than showing it
+     * once.
+     */
+    val secondaryTotal: java.math.BigDecimal? = null,
+    val secondaryCurrency: String = "",
+    val onboarded: Boolean = false,
 ) {
     /** Only what the selected scope covers. */
     val holdings: List<Holding> get() = summary.holdings.filter { scope.matches(it.asset.id) }
@@ -61,6 +72,7 @@ class PortfolioViewModel @Inject constructor(
     private val portfolio: PortfolioRepository,
     private val settings: SettingsDataStore,
     private val backfill: PortfolioBackfill,
+    private val fx: com.eddies.app.data.price.FxRepository,
     val icons: IconResolver,
 ) : ViewModel() {
 
@@ -76,13 +88,23 @@ class PortfolioViewModel @Inject constructor(
         history,
         settings.settings,
         combine(range, scope) { r, s -> r to s },
-        scrubbed,
-    ) { summary, points, cfg, (r, s), scrub ->
+        // Paired because combine only has typed overloads up to five flows.
+        combine(scrubbed, fx.converter()) { scrub, converter -> scrub to converter },
+    ) { summary, points, cfg, (r, s), (scrub, converter) ->
         PortfolioUiState(
             summary = summary,
             history = points.map { ChartPoint(it.day.dayToEpoch(), it.value.toDouble()) },
             range = r,
             scope = s,
+            secondaryTotal = converter
+                .takeIf { cfg.secondaryCurrency.isNotBlank() && cfg.secondaryCurrency != cfg.baseCurrency }
+                ?.convert(
+                    holdingsFor(summary, s).sumOf { it.marketValue },
+                    cfg.baseCurrency,
+                    cfg.secondaryCurrency,
+                ),
+            secondaryCurrency = cfg.secondaryCurrency,
+            onboarded = cfg.onboarded,
             advanced = cfg.advancedMode,
             hidden = cfg.hideBalances,
             compact = cfg.compactRows,
@@ -124,6 +146,20 @@ class PortfolioViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Marks the app as used once there is anything in the ledger.
+     *
+     * Gives the flag an actual job: it separates "never started" from "sold
+     * everything", which want different empty states. Someone who has cleared
+     * out does not need to be welcomed again.
+     */
+    fun markOnboardedIfHolding() {
+        viewModelScope.launch {
+            val s = state.value
+            if (s.summary.holdings.isNotEmpty() && !s.onboarded) settings.setOnboarded()
+        }
+    }
+
     /** Records today's total so the value chart has a point for today. */
     fun snapshotNow() {
         viewModelScope.launch {
@@ -138,3 +174,14 @@ internal fun String.dayToEpoch(): Long = runCatching {
         .atStartOfDay(java.time.ZoneId.systemDefault())
         .toInstant().toEpochMilli()
 }.getOrDefault(0L)
+
+/**
+ * Holdings within a scope.
+ *
+ * Duplicated from PortfolioUiState because the secondary total is computed while
+ * building that state, before there is a state to ask.
+ */
+private fun holdingsFor(
+    summary: com.eddies.app.domain.PortfolioSummary,
+    scope: PortfolioScope,
+) = summary.holdings.filter { scope.matches(it.asset.id) }

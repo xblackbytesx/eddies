@@ -15,7 +15,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -47,13 +49,18 @@ import java.time.ZoneId
 @Composable
 fun PortfolioScreen(
     onOpenAsset: (String) -> Unit,
+    onAddPosition: () -> Unit,
+    onOpenBackup: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: PortfolioViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val zone = remember { ZoneId.systemDefault() }
 
-    LaunchedEffect(state.summary.holdings.size) { viewModel.backfillIfEmpty() }
+    LaunchedEffect(state.summary.holdings.size) {
+        viewModel.backfillIfEmpty()
+        viewModel.markOnboardedIfHolding()
+    }
 
     LazyColumn(
         modifier = modifier.fillMaxWidth(),
@@ -101,7 +108,12 @@ fun PortfolioScreen(
 
         if (state.isEmpty) {
             item {
-                EmptyHint("No positions yet. Tap + to add your first coin.")
+                EmptyPortfolio(
+                    onboarded = state.onboarded,
+                    scope = state.scope,
+                    onAdd = onAddPosition,
+                    onImport = onOpenBackup,
+                )
             }
         } else {
             item {
@@ -165,6 +177,18 @@ private fun TotalHeader(state: PortfolioUiState, onToggleHidden: () -> Unit) {
             text = MoneyFormat.fiat(displayValue, summary.currency, state.hidden),
             style = MaterialTheme.typography.headlineLarge,
         )
+        // The same total in the second currency, when one is set and differs.
+        // Only while not scrubbing: two numbers moving under a dragging finger
+        // is harder to read than one.
+        if (state.scrubbed == null) {
+            state.secondaryTotal?.let { secondary ->
+                Text(
+                    text = MoneyFormat.fiat(secondary, state.secondaryCurrency, state.hidden),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
         Row(verticalAlignment = Alignment.CenterVertically) {
             PnlText(
                 text = MoneyFormat.signedFiat(state.scopedPnl, summary.currency, state.hidden),
@@ -283,6 +307,56 @@ private fun HoldingRow(
                     )
                 }
             }
+        }
+    }
+}
+
+/**
+ * What an empty portfolio says.
+ *
+ * Two different empty states, because "never started" and "sold everything" are
+ * different situations. Someone who has cleared out does not need to be welcomed
+ * again, and someone opening the app for the first time needs more than a plus
+ * sign to aim at: typing in years of history by hand is the wrong first
+ * impression when a CSV import exists.
+ */
+@Composable
+private fun EmptyPortfolio(
+    onboarded: Boolean,
+    scope: PortfolioScope,
+    onAdd: () -> Unit,
+    onImport: () -> Unit,
+) {
+    // A scope filter can empty a portfolio that is not actually empty. Offering
+    // to import a backup there would be nonsense.
+    if (scope != PortfolioScope.ALL) {
+        EmptyHint("Nothing in ${scope.label.lowercase()} yet.")
+        return
+    }
+
+    if (onboarded) {
+        EmptyHint("Nothing held right now. Past transactions are still in your history.")
+        return
+    }
+
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(top = 32.dp, bottom = 16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text("Nothing here yet", style = MaterialTheme.typography.titleMedium)
+        Text(
+            "Track crypto and shares together. Everything stays on this phone.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+        )
+        Spacer(Modifier.size(8.dp))
+        Button(onClick = onAdd, modifier = Modifier.fillMaxWidth()) {
+            Text("Add your first position")
+        }
+        OutlinedButton(onClick = onImport, modifier = Modifier.fillMaxWidth()) {
+            Text("Import a CSV or restore a backup")
         }
     }
 }
