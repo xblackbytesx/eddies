@@ -41,7 +41,20 @@ data class AddTxUiState(
     val note: String = "",
     val cashInput: String = "",
     val timestamp: Long = System.currentTimeMillis(),
+    /** The currency this trade was priced in. Not necessarily the base currency. */
     val currency: String = "EUR",
+    val baseCurrency: String = "EUR",
+    val availableCurrencies: List<String> = emptyList(),
+    /**
+     * What the entered price converts to in the base currency, at the rate in
+     * force on the transaction date.
+     *
+     * Shown so the number can be sanity checked before saving. It is an
+     * approximation of what a broker charged: the ECB reference rate carries no
+     * FX spread, and the spread is real money. Anyone who knows the amount they
+     * were actually debited should enter that instead, in the base currency.
+     */
+    val convertedPreview: java.math.BigDecimal? = null,
     val marketPrice: BigDecimal? = null,
     val editingId: Long = 0,
     val saving: Boolean = false,
@@ -95,15 +108,16 @@ data class AddTxUiState(
 
 @HiltViewModel
 class AddTransactionViewModel @Inject constructor(
-    savedStateHandle: SavedStateHandle,
+    private val saved: SavedStateHandle,
     private val assets: AssetRepository,
     private val transactions: TransactionRepository,
     private val prices: PriceRepository,
     private val settings: SettingsDataStore,
+    private val fx: com.eddies.app.data.price.FxRepository,
     private val icons: IconResolver,
 ) : ViewModel() {
 
-    private val route = savedStateHandle.toRoute<AddTransactionRoute>()
+    private val route = saved.toRoute<AddTransactionRoute>()
 
     private val _state = MutableStateFlow(AddTxUiState(editingId = route.transactionId))
     val state: StateFlow<AddTxUiState> = _state.asStateFlow()
@@ -111,13 +125,61 @@ class AddTransactionViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             val cfg = settings.current()
-            _state.update { it.copy(currency = cfg.baseCurrency) }
+            _state.update {
+                it.copy(
+                    currency = cfg.baseCurrency,
+                    baseCurrency = cfg.baseCurrency,
+                    availableCurrencies = com.eddies.app.data.price.FxRepository.ALL_CURRENCIES,
+                )
+            }
 
             if (route.transactionId != 0L) {
                 loadExisting(route.transactionId)
             } else {
                 route.assetId?.let { selectAsset(it) }
             }
+
+            // After loading, so a half typed edit wins over the stored original.
+            restoreDraft()
+
+            // Mirror every later keystroke, so the form survives the process
+            // being killed while the screen is off or another app is in front.
+            // A ViewModel alone does not: it dies with the process, and the user
+            // comes back to an empty form with no idea what they had typed.
+            _state.collect { saveDraft(it) }
+        }
+    }
+
+    private fun saveDraft(s: AddTxUiState) {
+        saved[KEY_TYPE] = s.type.name
+        saved[KEY_MODE] = s.amountMode.name
+        saved[KEY_QUANTITY] = s.quantityInput
+        saved[KEY_TOTAL] = s.totalInput
+        saved[KEY_PRICE] = s.priceInput
+        saved[KEY_FEE] = s.feeInput
+        saved[KEY_CASH] = s.cashInput
+        saved[KEY_NOTE] = s.note
+        saved[KEY_TIMESTAMP] = s.timestamp
+        saved[KEY_CURRENCY] = s.currency
+    }
+
+    private fun restoreDraft() {
+        // Absent means nothing was typed, so the loaded values stand.
+        val type = saved.get<String>(KEY_TYPE) ?: return
+        _state.update { s ->
+            s.copy(
+                type = runCatching { TxType.valueOf(type) }.getOrDefault(s.type),
+                amountMode = saved.get<String>(KEY_MODE)
+                    ?.let { m -> runCatching { AmountMode.valueOf(m) }.getOrNull() } ?: s.amountMode,
+                quantityInput = saved.get<String>(KEY_QUANTITY) ?: s.quantityInput,
+                totalInput = saved.get<String>(KEY_TOTAL) ?: s.totalInput,
+                priceInput = saved.get<String>(KEY_PRICE) ?: s.priceInput,
+                feeInput = saved.get<String>(KEY_FEE) ?: s.feeInput,
+                cashInput = saved.get<String>(KEY_CASH) ?: s.cashInput,
+                note = saved.get<String>(KEY_NOTE) ?: s.note,
+                timestamp = saved.get<Long>(KEY_TIMESTAMP) ?: s.timestamp,
+                currency = saved.get<String>(KEY_CURRENCY) ?: s.currency,
+            )
         }
     }
 
@@ -167,13 +229,62 @@ class AddTransactionViewModel @Inject constructor(
 
     fun setType(type: TxType) = _state.update { it.copy(type = type) }
     fun setAmountMode(mode: AmountMode) = _state.update { it.copy(amountMode = mode) }
-    fun setQuantity(v: String) = _state.update { it.copy(quantityInput = v.sanitiseDecimal()) }
-    fun setTotal(v: String) = _state.update { it.copy(totalInput = v.sanitiseDecimal()) }
-    fun setPrice(v: String) = _state.update { it.copy(priceInput = v.sanitiseDecimal()) }
+    fun setQuantity(v: String) {
+        _state.update { it.copy(quantityInput = v.sanitiseDecimal()) }
+        refreshConversion()
+    }
+
+    fun setTotal(v: String) {
+        _state.update { it.copy(totalInput = v.sanitiseDecimal()) }
+        refreshConversion()
+    }
+
+    fun setPrice(v: String) {
+        _state.update { it.copy(priceInput = v.sanitiseDecimal()) }
+        refreshConversion()
+    }
     fun setFee(v: String) = _state.update { it.copy(feeInput = v.sanitiseDecimal()) }
     fun setNote(v: String) = _state.update { it.copy(note = v) }
+
+    /**
+     * Changes the currency this trade was priced in.
+     *
+     * The stored transaction keeps its own currency and the cost basis engine
+     * converts at the rate for its date, so a USD purchase in a EUR portfolio
+     * stays honest about what it was.
+     */
+    fun setCurrency(code: String) {
+        _state.update { it.copy(currency = code) }
+        refreshConversion()
+    }
+
+    private fun refreshConversion() {
+        viewModelScope.launch {
+            val s = _state.value
+            if (s.currency == s.baseCurrency) {
+                _state.update { it.copy(convertedPreview = null) }
+                return@launch
+            }
+            // The rate on the transaction's own date, not today's. Buying in
+            // 2024 and entering it in 2026 must use the 2024 rate.
+            runCatching { fx.ensureHistoryFrom(isoDay(s.timestamp)) }
+            val table = runCatching { fx.historicalTable() }.getOrNull()
+            val amount = if (s.isCashOnly) s.cashInput.toDecimalOrNull()
+            else s.effectiveQuantity?.let { qty -> s.effectivePrice?.let { qty * it } }
+            val rate = table?.rate(s.currency, s.baseCurrency, s.timestamp)
+            _state.update {
+                it.copy(convertedPreview = if (amount != null && rate != null) amount * rate else null)
+            }
+        }
+    }
+
+    private fun isoDay(ts: Long): String =
+        java.time.Instant.ofEpochMilli(ts).atZone(java.time.ZoneOffset.UTC).toLocalDate().toString()
     fun setCash(v: String) = _state.update { it.copy(cashInput = v.sanitiseDecimal()) }
-    fun setTimestamp(ts: Long) = _state.update { it.copy(timestamp = ts) }
+    fun setTimestamp(ts: Long) {
+        _state.update { it.copy(timestamp = ts) }
+        refreshConversion()
+    }
 
     fun useMarketPrice() {
         _state.update { s ->
@@ -245,3 +356,14 @@ internal fun String.sanitiseDecimal(): String {
 
 internal fun String.toDecimalOrNull(): BigDecimal? =
     trim().takeIf { it.isNotEmpty() }?.let { runCatching { BigDecimal(it) }.getOrNull() }
+
+private const val KEY_TYPE = "draft_type"
+private const val KEY_MODE = "draft_mode"
+private const val KEY_QUANTITY = "draft_quantity"
+private const val KEY_TOTAL = "draft_total"
+private const val KEY_PRICE = "draft_price"
+private const val KEY_FEE = "draft_fee"
+private const val KEY_CASH = "draft_cash"
+private const val KEY_NOTE = "draft_note"
+private const val KEY_TIMESTAMP = "draft_timestamp"
+private const val KEY_CURRENCY = "draft_currency"

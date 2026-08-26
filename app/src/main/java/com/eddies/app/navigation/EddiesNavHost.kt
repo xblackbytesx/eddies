@@ -1,6 +1,7 @@
 package com.eddies.app.navigation
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -15,9 +16,11 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -70,11 +73,6 @@ fun EddiesNavHost(
     locked: Boolean,
     onUnlocked: () -> Unit,
 ) {
-    if (locked) {
-        LockScreen(onUnlocked = onUnlocked)
-        return
-    }
-
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val destination = backStackEntry?.destination
@@ -91,6 +89,7 @@ fun EddiesNavHost(
         else -> tabs.firstOrNull { destination?.hasRoute(it.routeClass) == true }?.label ?: "Eddies"
     }
 
+    Box {
     Scaffold(
         // The bars own their system insets; the content must not add them again.
         contentWindowInsets = WindowInsets(0),
@@ -197,5 +196,22 @@ fun EddiesNavHost(
                 composable<AboutRoute> { AboutScreen() }
             }
         }
+    }
+
+    // Drawn over the nav host rather than replacing it.
+    //
+    // Returning early instead used to unmount the whole NavHost, taking
+    // rememberNavController with it, so unlocking built a fresh controller
+    // starting at the portfolio. Every screen lock threw away where you were and
+    // anything half typed. An opaque overlay hides the content just as
+    // completely and costs nothing.
+    if (locked) {
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = MaterialTheme.colorScheme.background,
+        ) {
+            LockScreen(onUnlocked = onUnlocked)
+        }
+    }
     }
 }

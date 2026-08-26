@@ -355,6 +355,26 @@ verified on a device.
 
 ## Invariants
 
+**The lock screen is drawn over the nav host, never instead of it.** Returning
+early from `EddiesNavHost` unmounted the whole thing, taking
+`rememberNavController` with it, so unlocking built a fresh controller starting
+at the portfolio. Every screen timeout threw away where the user was and anything
+half typed. An opaque `Surface` over the top hides the content just as
+completely.
+
+**A half typed transaction survives the process being killed.**
+`AddTransactionViewModel` mirrors every field into `SavedStateHandle` and
+restores it after loading, so a screen that times out or a call that interrupts
+does not lose the entry. A ViewModel alone is not enough: it dies with the
+process, and Android kills backgrounded apps freely.
+
+**A transaction is converted at the rate in force on its own date**, not today's.
+`HistoricalRates.onOrBefore` is pure and tested, and returns null rather than the
+oldest rate held when a transaction predates everything known. It used to fall
+back, which valued a 2024 purchase at a 2026 rate: silently, plausibly, wrongly.
+`FxRepository.ensureHistoryFrom` backfills the whole ledger range in one
+Frankfurter call at startup, so the null case should not arise in practice.
+
 **A default UI state must be distinguishable from real data.** Every screen
 carries a `loaded` flag that only the real transform sets, and renders
 `LoadingPlaceholder` until then. Without it the default `PortfolioUiState` is an
