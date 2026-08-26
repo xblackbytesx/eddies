@@ -7,7 +7,9 @@ import com.eddies.app.data.db.entity.PriceCandleEntity
 import com.eddies.app.data.prefs.RealtimeFeed
 import com.eddies.app.data.prefs.SettingsDataStore
 import com.eddies.app.domain.AssetClass
+import com.eddies.app.data.stocks.TradegateSource
 import com.eddies.app.domain.AssetIds
+import com.eddies.app.domain.PriceSourceId
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -31,6 +33,7 @@ import javax.inject.Singleton
 class PriceHistoryRepository @Inject constructor(
     private val priceDao: PriceDao,
     private val assetDao: AssetDao,
+    private val sourceRefDao: com.eddies.app.data.db.dao.AssetSourceRefDao,
     private val settings: SettingsDataStore,
     private val kraken: KrakenHistorySource,
     private val binance: BinanceHistorySource,
@@ -80,7 +83,19 @@ class PriceHistoryRepository @Inject constructor(
     private suspend fun fetchInto(assetId: String, interval: CandleInterval, since: Long?) {
         val asset = assetDao.byId(assetId) ?: return
         val cfg = settings.current()
-        val ticker = asset.symbol
+
+        // Tradegate serves a live snapshot and no history at all, so a chart for
+        // a Tradegate holding is drawn from the same instrument's Yahoo listing,
+        // resolved by ISIN when the asset was added and kept in
+        // asset_source_refs. Same security, a different venue's prints.
+        val ticker = if (AssetIds.exchangeOf(assetId) == TradegateSource.EXCHANGE) {
+            sourceRefDao.forAssets(listOf(assetId))
+                .firstOrNull { it.source == PriceSourceId.YAHOO }
+                ?.sourceSymbol
+                ?: return
+        } else {
+            asset.symbol
+        }
 
         // A share has exactly one source; a coin has a ladder of three.
         val ordered = if (AssetIds.classOf(assetId) == AssetClass.STOCK) {

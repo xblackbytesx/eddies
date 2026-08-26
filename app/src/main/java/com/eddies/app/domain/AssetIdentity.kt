@@ -1,7 +1,7 @@
 package com.eddies.app.domain
 
 /** Every market-data source the app can name a symbol in. */
-enum class PriceSourceId { KRAKEN, BINANCE, COINPAPRIKA, COINGECKO, KOIOS, YAHOO, STOCK_API, MANUAL }
+enum class PriceSourceId { KRAKEN, BINANCE, COINPAPRIKA, COINGECKO, KOIOS, YAHOO, TRADEGATE, STOCK_API, MANUAL }
 
 /**
  * An asset as the app knows it, independent of what any source calls it.
@@ -33,7 +33,14 @@ object AssetIds {
     fun stock(exchange: String, ticker: String): String = "stock:$exchange:$ticker"
     fun cash(code: String): String = "cash:${code.uppercase()}"
 
-    fun classOf(assetId: String): AssetClass? = when (assetId.substringBefore(':')) {
+    /** The exchange segment of a stock id, or null for anything else. */
+    fun exchangeOf(assetId: String): String? =
+        assetId.takeIf { it.startsWith("stock:") }?.split(":")?.getOrNull(1)
+
+    /** The instrument segment: a ticker for most venues, an ISIN for Tradegate. */
+    fun tickerOf(assetId: String): String = assetId.substringAfterLast(":")
+
+    fun classOf(assetId: String): AssetClass? = when (assetId.substringBefore(":")) {
         "crypto" -> AssetClass.CRYPTO
         "stock" -> AssetClass.STOCK
         "cash" -> AssetClass.CASH

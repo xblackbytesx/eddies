@@ -126,6 +126,17 @@ fun AssetDetailScreen(
                 formatTs = { ChartMath.formatScrubTs(it, zone, state.range) },
                 onScrub = viewModel::onScrub,
             )
+            // A Tradegate holding is priced live by Tradegate, but Tradegate
+            // publishes no history, so the chart is the same instrument on
+            // whichever venue Yahoo maps the ISIN to. Close, but not the same
+            // prints, and the last point can differ from the price above.
+            if (com.eddies.app.domain.AssetIds.exchangeOf(holding.asset.id) == "TRADEGATE") {
+                Text(
+                    "Chart uses ${holding.asset.symbol} prices. Tradegate publishes no history.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),

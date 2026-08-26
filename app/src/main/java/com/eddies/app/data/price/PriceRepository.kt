@@ -54,6 +54,7 @@ class PriceRepository @Inject constructor(
     private val binance: BinanceWsSource,
     private val aggregator: AggregatorSource,
     private val stocks: com.eddies.app.data.stocks.StockPriceSource,
+    private val tradegate: com.eddies.app.data.stocks.TradegateSource,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + kotlinx.coroutines.Dispatchers.IO)
 
@@ -130,7 +131,13 @@ class PriceRepository @Inject constructor(
         // long tail: most coins are not listed on any single exchange.
         val remaining = cryptoTickers.filterKeys { it !in liveSymbols.keys }
         val pollSymbols = aggregator.resolve(remaining, baseCurrency)
-        val stockSymbols = stocks.resolve(stockTickers, baseCurrency)
+        // Tradegate is its own venue with its own prices, so it is resolved
+        // first and whatever it does not carry falls through to Yahoo.
+        val tradegateSymbols = tradegate.resolve(stockTickers, baseCurrency)
+        val stockSymbols = stocks.resolve(
+            stockTickers.filterKeys { it !in tradegateSymbols.keys },
+            baseCurrency,
+        )
 
         val emitMutex = kotlinx.coroutines.sync.Mutex()
         suspend fun publish(tick: PriceTick) {
@@ -159,6 +166,14 @@ class PriceRepository @Inject constructor(
         if (stockSymbols.isNotEmpty()) {
             launch {
                 stocks.stream(stockSymbols).collect { tick ->
+                    publish(tick)
+                    persist(tick)
+                }
+            }
+        }
+        if (tradegateSymbols.isNotEmpty()) {
+            launch {
+                tradegate.stream(tradegateSymbols).collect { tick ->
                     publish(tick)
                     persist(tick)
                 }
