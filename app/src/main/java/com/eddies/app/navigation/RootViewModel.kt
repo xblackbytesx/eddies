@@ -7,6 +7,7 @@ import com.eddies.app.data.prefs.SettingsDataStore
 import com.eddies.app.data.price.FxRepository
 import com.eddies.app.data.repo.AssetRepository
 import com.eddies.app.data.staking.StakingRepository
+import com.eddies.app.demo.DemoSeeder
 import com.eddies.app.work.WorkScheduler
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -40,6 +41,7 @@ class RootViewModel @Inject constructor(
     private val fx: FxRepository,
     private val work: WorkScheduler,
     private val staking: StakingRepository,
+    private val demoSeeder: DemoSeeder,
 ) : ViewModel() {
 
     private val unlocked = MutableStateFlow(false)
@@ -58,6 +60,10 @@ class RootViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             // All three are idempotent and cheap after the first run.
+            // A no-op in the full flavour: the implementation is chosen at build
+            // time, so the real app carries no demo code path at all.
+            runCatching { demoSeeder.seedIfNeeded() }
+
             assets.ensureSeeded()
             fx.refreshIfStale()
             work.ensureScheduled()

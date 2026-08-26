@@ -42,14 +42,16 @@ fi
 
 gradle --no-daemon "$@"
 
-# ABI splits mean several APKs per build type, so copy whatever is there rather
-# than naming each one. The universal build carries every ABI; the per-ABI ones
-# are a third the size.
+# ABI splits and product flavours together mean several APKs per build type,
+# under apk/<flavour>/<type>/. Copy whatever is there rather than naming each
+# one, and keep the flavour in the filename so a demo build is never mistaken
+# for a real one sitting next to it.
 mkdir -p build-output
-for apk in app/build/outputs/apk/debug/*.apk app/build/outputs/apk/release/*.apk; do
+for apk in app/build/outputs/apk/*/*/*.apk; do
     [ -f "$apk" ] || continue
+    flavour=$(basename "$(dirname "$(dirname "$apk")")")
     base=$(basename "$apk")
-    cp "$apk" "build-output/${base/app-/eddies-}"
+    cp "$apk" "build-output/${base/app-/eddies-$flavour-}"
 done
 
 # Ownership is restored by the EXIT trap above, which also covers the paths a

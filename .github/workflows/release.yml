@@ -67,7 +67,7 @@ jobs:
 
       # The release gate. A tag that fails the suite must not produce an APK.
       - name: Unit tests
-        run: gradle --no-daemon :app:testDebugUnitTest
+        run: gradle --no-daemon :app:testFullDebugUnitTest
 
       - name: Materialize release keystore
         id: signing
@@ -86,7 +86,9 @@ jobs:
           RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
           RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
         run: |
-          gradle --no-daemon :app:assembleRelease \
+          # Explicitly the full flavour. A release must never publish a demo
+          # APK: it carries a fabricated portfolio and would look like real data.
+          gradle --no-daemon :app:assembleFullRelease \
             -PappVersionName="${{ steps.version.outputs.name }}" \
             -PappVersionCode="${{ github.run_number }}"
 
@@ -97,7 +99,7 @@ jobs:
           # want arm64-v8a, and universal is there for anyone unsure which to pick.
           mkdir -p dist
           TAG="${{ github.ref_name }}"
-          for apk in app/build/outputs/apk/release/*.apk; do
+          for apk in app/build/outputs/apk/full/release/*.apk; do
             [ -f "$apk" ] || continue
             name=$(basename "$apk" .apk)
             name=${name#app-}

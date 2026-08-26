@@ -29,6 +29,36 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    /**
+     * Demo is a separate installable app, not a runtime switch.
+     *
+     * A different applicationId means a different data directory, so the demo
+     * build physically cannot read the real ledger. That is an isolation the
+     * operating system enforces, rather than one that depends on six database
+     * write paths all remembering to check a flag, two of which run outside any
+     * screen (RootViewModel on launch, DailyWorker on a schedule) and could fire
+     * mid-screenshot.
+     *
+     * Both flavours share every line of app code. The only difference is which
+     * DemoSeeder implementation is on the source path.
+     */
+    flavorDimensions += "distribution"
+    productFlavors {
+        create("full") {
+            dimension = "distribution"
+            isDefault = true
+            // Defined here rather than in strings.xml: a resValue and a resource
+            // file entry with the same name are a duplicate-resource error.
+            resValue("string", "app_name", "Eddies")
+        }
+        create("demo") {
+            dimension = "distribution"
+            applicationIdSuffix = ".demo"
+            versionNameSuffix = "-demo"
+            resValue("string", "app_name", "Eddies Demo")
+        }
+    }
+
     signingConfigs {
         val debugKeystore = rootProject.file("keystore/debug.keystore")
         if (debugKeystore.exists()) {
