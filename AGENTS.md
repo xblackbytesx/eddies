@@ -611,4 +611,17 @@ against the live endpoints, including holding a real WebSocket open.
 What is NOT verified here, by construction: there is no phone, so nothing about
 SQLCipher opening a database, the biometric prompt, socket behaviour under real
 backgrounding, or how the charts feel has been observed. That is the user's to
-run.
+**Animations are keyed on identity, never on values.** The allocation ring's
+reveal is keyed on which holdings are present, not on their sizes. Keying it on
+the sizes meant every price tick built a fresh `Animatable` at zero and restarted
+the sweep, so against a feed that ticks several times a second the ring never
+finished revealing: it sat there collapsing and re-expanding forever. Values
+glide separately with `animateFloatAsState`. The same trap is waiting in any
+chart whose data changes while it is on screen.
+
+**The price feed is sampled before it reaches the portfolio.** Kraken's ticker
+fires on every trade, and each emission would otherwise refold the whole ledger,
+recompose the holdings list and re-sort it. One second still reads as
+unmistakably live. The cost is that cached prices on a cold start appear up to a
+second later, which is invisible next to opening the encrypted database.
+

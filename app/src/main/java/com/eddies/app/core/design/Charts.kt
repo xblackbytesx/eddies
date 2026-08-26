@@ -1,6 +1,7 @@
 package com.eddies.app.core.design
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -277,7 +278,20 @@ private fun compactAxis(v: Double): String {
     }
 }
 
-/** Allocation ring for the insights screen. */
+/**
+ * Allocation ring for the insights screen.
+ *
+ * Two separate animations, and keeping them separate is the whole point.
+ *
+ * The reveal sweeps the ring out once when the set of holdings changes, and is
+ * keyed on the labels rather than on the slice sizes. Keying it on the sizes
+ * meant every price tick built a fresh Animatable at zero and restarted the
+ * sweep, so with a feed that ticks several times a second the ring never
+ * finished revealing: it sat there collapsing and re-expanding forever.
+ *
+ * The sizes then glide to their new values instead of jumping, so a holding
+ * drifting from 34.1 to 34.2 percent reads as movement rather than as a redraw.
+ */
 @Composable
 fun AllocationDonut(
     slices: List<Pair<String, Float>>,
@@ -285,16 +299,27 @@ fun AllocationDonut(
     modifier: Modifier = Modifier,
     strokeWidth: Dp = 22.dp,
 ) {
-    val sweepAnim = remember(slices) { Animatable(0f) }
-    LaunchedEffect(slices) { sweepAnim.animateTo(1f, tween(600)) }
+    // Which holdings, not how big they are. A List<String> compares equal across
+    // ticks, so the reveal survives a price change.
+    val labels = slices.map { it.first }
+    val reveal = remember(labels) { Animatable(0f) }
+    LaunchedEffect(labels) { reveal.animateTo(1f, tween(600)) }
+
+    val animated = slices.map { (label, fraction) ->
+        animateFloatAsState(
+            targetValue = fraction,
+            animationSpec = tween(durationMillis = 450),
+            label = "slice-$label",
+        ).value
+    }
 
     Canvas(modifier) {
         val stroke = strokeWidth.toPx()
         val diameter = minOf(size.width, size.height) - stroke
         val topLeft = Offset((size.width - diameter) / 2f, (size.height - diameter) / 2f)
         var start = -90f
-        slices.forEachIndexed { i, (_, fraction) ->
-            val sweep = fraction * 360f * sweepAnim.value
+        animated.forEachIndexed { i, fraction ->
+            val sweep = fraction * 360f * reveal.value
             drawArc(
                 color = colors[i % colors.size],
                 startAngle = start,
