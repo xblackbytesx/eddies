@@ -127,13 +127,37 @@ class AssetRepository @Inject constructor(
     suspend fun resolveTradegate(isin: String): TradegateLookup {
         val quote = tradegate.quote(isin) ?: return TradegateLookup.NotListed
 
-        val id = AssetIds.stock(TradegateSource.EXCHANGE, isin)
-        // Yahoo search accepts an ISIN and answers with the listing, which is
-        // where the human-readable name comes from. If it is down we still have
-        // a tradeable instrument and a price, so the ISIN stands in as the name.
+        // Yahoo search accepts an ISIN and answers with the canonical listing.
         val match = runCatching { yahoo.search(isin, limit = 1) }.getOrNull()?.firstOrNull()
 
-        val asset = Asset(
+        // Reuse that listing's id rather than minting a Tradegate-specific one.
+        //
+        // Tradegate is where the shares are held and where the live price comes
+        // from, but it is the same instrument as the listing Yahoo knows. Giving
+        // it a separate id meant searching by name and searching by ISIN
+        // produced two assets for one holding, so buying the same ETF twice
+        // through different tabs split the position in half on the portfolio
+        // screen. Which venue prices it is recorded in asset_source_refs, which
+        // is what that table is for.
+        //
+        // Falls back to a Tradegate-specific id only when Yahoo cannot resolve
+        // the ISIN at all, so an unlisted instrument is still tradeable here.
+        //
+        // An ISIN already held wins over both. The ISIN is the instrument's
+        // identity and Yahoo's answer is only a name for it: the search returns
+        // several rows for some ISINs (a real listing plus a synthetic
+        // "<ISIN>.SG" one) in an order nothing guarantees, so trusting it would
+        // mint a second holding for an ISIN already in the portfolio. Looking
+        // the ISIN up twice must land on the same holding, always.
+        val held = runCatching { sourceRefDao.assetForSource(PriceSourceId.TRADEGATE, isin) }.getOrNull()
+        val id = held ?: match?.id ?: AssetIds.stock(TradegateSource.EXCHANGE, isin)
+
+        // An instrument already held keeps the naming it was added with. Yahoo
+        // answering with a different listing this time is not a reason to rename
+        // a holding under the user, and a symbol that shifts would move it in
+        // and out of duplicate groups.
+        val existing = held?.let { assetDao.byId(it)?.toDomain() }
+        val asset = existing ?: Asset(
             id = id,
             assetClass = AssetClass.STOCK,
             symbol = match?.symbol ?: isin,

@@ -36,6 +36,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import com.eddies.app.feature.about.AboutScreen
 import com.eddies.app.feature.accounts.AccountsScreen
+import com.eddies.app.feature.merge.MergeDuplicatesScreen
 import com.eddies.app.feature.addtransaction.AddTransactionScreen
 import com.eddies.app.feature.assetdetail.AssetDetailScreen
 import com.eddies.app.feature.backup.BackupScreen
@@ -86,6 +87,7 @@ fun EddiesNavHost(
         destination?.hasRoute(AccountsRoute::class) == true -> "Accounts"
         destination?.hasRoute(AboutRoute::class) == true -> "About"
         destination?.hasRoute(TransactionsRoute::class) == true -> "All transactions"
+        destination?.hasRoute(MergeDuplicatesRoute::class) == true -> "Merge duplicates"
         else -> tabs.firstOrNull { destination?.hasRoute(it.routeClass) == true }?.label ?: "Eddies"
     }
 
@@ -163,6 +165,7 @@ fun EddiesNavHost(
                         onOpenTransactions = { navController.navigate(TransactionsRoute) },
                         onOpenAccounts = { navController.navigate(AccountsRoute) },
                         onOpenAbout = { navController.navigate(AboutRoute) },
+                        onOpenMergeDuplicates = { navController.navigate(MergeDuplicatesRoute) },
                     )
                 }
                 composable<AssetDetailRoute> { entry ->
@@ -192,6 +195,7 @@ fun EddiesNavHost(
                     )
                 }
                 composable<AccountsRoute> { AccountsScreen() }
+                composable<MergeDuplicatesRoute> { MergeDuplicatesScreen() }
                 composable<BackupRoute> { BackupScreen() }
                 composable<AboutRoute> { AboutScreen() }
             }

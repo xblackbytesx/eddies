@@ -10,6 +10,7 @@ import com.eddies.app.data.db.entity.AssetEntity
 import com.eddies.app.data.db.entity.AssetCustodyEntity
 import com.eddies.app.data.db.entity.AssetSourceRefEntity
 import com.eddies.app.domain.AssetClass
+import com.eddies.app.domain.PriceSourceId
 import com.eddies.app.data.db.entity.CandleInterval
 import com.eddies.app.data.db.entity.PriceCandleEntity
 import com.eddies.app.data.db.entity.PriceLatestEntity
@@ -31,6 +32,9 @@ interface AssetDao {
 
     @Query("SELECT * FROM assets WHERE id = :id")
     suspend fun byId(id: String): AssetEntity?
+
+    @Query("DELETE FROM assets WHERE id = :id")
+    suspend fun delete(id: String)
 
     @Query("SELECT * FROM assets WHERE id IN (:ids)")
     suspend fun byIds(ids: List<String>): List<AssetEntity>
@@ -85,8 +89,30 @@ interface AssetSourceRefDao {
     @Query("SELECT * FROM asset_source_refs WHERE assetId IN (:assetIds)")
     suspend fun forAssets(assetIds: List<String>): List<AssetSourceRefEntity>
 
+    @Query("SELECT * FROM asset_source_refs WHERE source = :source")
+    suspend fun forSource(source: PriceSourceId): List<AssetSourceRefEntity>
+
+    /**
+     * The asset already carrying this source symbol, if any.
+     *
+     * An ISIN is the instrument's identity, so looking it up twice has to land
+     * on the same holding whatever the naming lookup answers that day.
+     */
+    @Query("SELECT assetId FROM asset_source_refs WHERE source = :source AND sourceSymbol = :sourceSymbol LIMIT 1")
+    suspend fun assetForSource(source: PriceSourceId, sourceSymbol: String): String?
+
     @Query("DELETE FROM asset_source_refs WHERE assetId = :assetId AND source = :source")
     suspend fun clearFor(assetId: String, source: String)
+
+    /**
+     * Carries a merged asset's price routing over to the one being kept.
+     *
+     * OR IGNORE because the primary key spans (assetId, source, sourceSymbol):
+     * if the target already resolves the same symbol from the same source, the
+     * row stays behind and is cascaded away with its asset, which is correct.
+     */
+    @Query("UPDATE OR IGNORE asset_source_refs SET assetId = :toAssetId WHERE assetId = :fromAssetId")
+    suspend fun reassign(fromAssetId: String, toAssetId: String)
 }
 
 @Dao
@@ -142,6 +168,13 @@ interface TransactionDao {
 
     @Query("DELETE FROM transactions WHERE id = :id")
     suspend fun delete(id: Long)
+
+    /** Moves every row from one asset to another, for merging duplicates. */
+    @Query("UPDATE transactions SET assetId = :toAssetId WHERE assetId = :fromAssetId")
+    suspend fun reassign(fromAssetId: String, toAssetId: String): Int
+
+    @Query("SELECT assetId, COUNT(*) AS count FROM transactions GROUP BY assetId")
+    suspend fun countsByAsset(): List<AssetTransactionCount>
 
     @Query("DELETE FROM transactions")
     suspend fun deleteAll()
@@ -202,6 +235,19 @@ interface PriceDao {
     /** Hourly candles age out; daily ones are the long-term series and are kept. */
     @Query("DELETE FROM price_candles WHERE interval = 'HOUR' AND timestamp < :before")
     suspend fun pruneHourly(before: Long)
+
+    /**
+     * Drops a merged asset's cached prices rather than moving them.
+     *
+     * Two listings of one instrument quote it at different venues, in possibly
+     * different currencies. Interleaving their candles would draw a chart that
+     * never happened; refetching costs one request.
+     */
+    @Query("DELETE FROM price_candles WHERE assetId = :assetId")
+    suspend fun clearCandles(assetId: String)
+
+    @Query("DELETE FROM price_latest WHERE assetId = :assetId")
+    suspend fun clearLatest(assetId: String)
 }
 
 @Dao
@@ -267,6 +313,9 @@ interface WatchlistDao {
 
     @Query("SELECT assetId FROM watchlist")
     suspend fun assetIds(): List<String>
+
+    @Query("UPDATE OR IGNORE watchlist SET assetId = :toAssetId WHERE assetId = :fromAssetId")
+    suspend fun reassign(fromAssetId: String, toAssetId: String)
 }
 
 @Dao
@@ -285,6 +334,9 @@ interface CustodyDao {
 
     @Query("DELETE FROM asset_custody WHERE assetId = :assetId")
     suspend fun clear(assetId: String)
+
+    @Query("UPDATE OR IGNORE asset_custody SET assetId = :toAssetId WHERE assetId = :fromAssetId")
+    suspend fun reassign(fromAssetId: String, toAssetId: String)
 
     /**
      * Labels already in use, most recent first, for the suggestion row.
@@ -313,6 +365,9 @@ interface StakingDao {
     /** Drops rows whose account is gone, so a deleted wallet stops inflating totals. */
     @Query("DELETE FROM staking_balances WHERE accountId NOT IN (SELECT id FROM accounts)")
     suspend fun pruneOrphans()
+
+    @Query("UPDATE staking_balances SET assetId = :toAssetId WHERE assetId = :fromAssetId")
+    suspend fun reassign(fromAssetId: String, toAssetId: String)
 }
 
 @Dao
@@ -328,4 +383,18 @@ interface CorporateActionDao {
 
     @Query("SELECT * FROM corporate_actions ORDER BY timestamp")
     suspend fun all(): List<SplitEventEntity>
+
+    /**
+     * Splits have to follow the lots they apply to. A merged asset's history
+     * arriving without its splits would silently misprice every lot bought
+     * before one.
+     */
+    @Query("UPDATE OR IGNORE corporate_actions SET assetId = :toAssetId WHERE assetId = :fromAssetId")
+    suspend fun reassign(fromAssetId: String, toAssetId: String)
+
+    @Query("DELETE FROM corporate_actions WHERE assetId = :assetId")
+    suspend fun clear(assetId: String)
 }
+
+/** How many ledger rows an asset has, for deciding which duplicate to keep. */
+data class AssetTransactionCount(val assetId: String, val count: Int)

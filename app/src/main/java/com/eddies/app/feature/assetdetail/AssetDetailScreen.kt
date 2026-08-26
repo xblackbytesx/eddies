@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material3.FilterChip
@@ -20,6 +21,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -130,7 +132,7 @@ fun AssetDetailScreen(
             // publishes no history, so the chart is the same instrument on
             // whichever venue Yahoo maps the ISIN to. Close, but not the same
             // prints, and the last point can differ from the price above.
-            if (com.eddies.app.domain.AssetIds.exchangeOf(holding.asset.id) == "TRADEGATE") {
+            if (state.pricedByTradegate) {
                 Text(
                     "Chart uses ${holding.asset.symbol} prices. Tradegate publishes no history.",
                     style = MaterialTheme.typography.labelSmall,
@@ -271,6 +273,19 @@ fun AssetDetailScreen(
         Section(
             title = "Transactions",
             subtitle = "${state.transactions.size} recorded",
+            // Adding another trade in something already held should not mean
+            // going back to search and finding it again.
+            action = {
+                TextButton(onClick = { onAddTransaction(holding.asset.id) }) {
+                    Icon(
+                        Icons.Default.Add,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Spacer(Modifier.size(4.dp))
+                    Text("Add")
+                }
+            },
         ) {
             if (state.transactions.isEmpty()) {
                 EmptyHint("Nothing recorded yet.")
