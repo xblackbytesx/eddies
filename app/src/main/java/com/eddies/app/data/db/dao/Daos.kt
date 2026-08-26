@@ -12,6 +12,7 @@ import com.eddies.app.data.db.entity.AssetSourceRefEntity
 import com.eddies.app.data.db.entity.CandleInterval
 import com.eddies.app.data.db.entity.PriceCandleEntity
 import com.eddies.app.data.db.entity.PriceLatestEntity
+import com.eddies.app.data.db.entity.StakingBalanceEntity
 import com.eddies.app.data.db.entity.FxRateEntity
 import com.eddies.app.data.db.entity.PortfolioSnapshotEntity
 import com.eddies.app.data.db.entity.TransactionEntity
@@ -283,4 +284,23 @@ interface CustodyDao {
      */
     @Query("SELECT DISTINCT label FROM asset_custody ORDER BY updatedAt DESC LIMIT :limit")
     suspend fun knownLabels(limit: Int = 12): List<String>
+}
+
+@Dao
+interface StakingDao {
+    @Upsert
+    suspend fun upsert(entry: StakingBalanceEntity)
+
+    @Query("SELECT * FROM staking_balances")
+    fun observeAll(): Flow<List<StakingBalanceEntity>>
+
+    @Query("SELECT * FROM staking_balances")
+    suspend fun all(): List<StakingBalanceEntity>
+
+    @Query("DELETE FROM staking_balances WHERE stakeAddress = :stakeAddress")
+    suspend fun delete(stakeAddress: String)
+
+    /** Drops rows whose account is gone, so a deleted wallet stops inflating totals. */
+    @Query("DELETE FROM staking_balances WHERE accountId NOT IN (SELECT id FROM accounts)")
+    suspend fun pruneOrphans()
 }

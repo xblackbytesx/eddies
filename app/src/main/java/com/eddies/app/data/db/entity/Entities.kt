@@ -217,3 +217,30 @@ data class AssetCustodyEntity(
     val note: String? = null,
     val updatedAt: Long = System.currentTimeMillis(),
 )
+
+/**
+ * Live staking figures for one stake address, refreshed from the chain.
+ *
+ * Deliberately NOT ledger rows. Rewards accrue continuously and are withdrawn in
+ * lumps, so a transaction per epoch would be hundreds of rows that go stale the
+ * moment anything is withdrawn. This is a balance, like a price: it is fetched,
+ * not recorded, and it is replaced rather than appended to.
+ *
+ * [pending] is what the chain calls rewards_available, meaning earned minus
+ * already withdrawn. That is the number that adds to a holding: anything
+ * withdrawn has left the reward account and is either in the wallet already or
+ * recorded by hand as a transaction, so counting it here too would double it.
+ */
+@Entity(tableName = "staking_balances")
+data class StakingBalanceEntity(
+    @PrimaryKey val stakeAddress: String,
+    val assetId: String,
+    val accountId: Long,
+    /** Outstanding, un-withdrawn rewards, in whole coins. */
+    val pending: String,
+    /** Lifetime rewards earned, in whole coins. Informational. */
+    val totalEarned: String,
+    val poolId: String? = null,
+    val syncedAt: Long = System.currentTimeMillis(),
+    val error: String? = null,
+)

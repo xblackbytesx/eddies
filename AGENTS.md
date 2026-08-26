@@ -137,12 +137,32 @@ more. Nothing in the UI pretends otherwise; the chart starts where the data does
 Both delta cleanly: Kraken takes `since` in seconds, Binance `startTime` in
 millis. A seven-day delta is about 640 bytes against 61 KB for the full pull.
 
-### Koios, for Phase 2 staking
+### Koios, for Cardano staking
 
-`api.koios.rest`, public tier is keyless at 5000 requests/day, and
-`account_rewards` returns full reward history for a stake address. Not yet wired
-up; `AccountEntity.stakingAddress` and `TxType.STAKING_REWARD` exist so it is an
-addition rather than a migration.
+`api.koios.rest`, public tier keyless at 5000 requests a day. A sync is one
+request per staking address.
+
+**`account_info`, not `account_rewards`.** The rewards endpoint returns a row per
+epoch back to 2020, which is hundreds of rows describing money that has mostly
+been withdrawn already. `POST /account_info` with
+`{"_stake_addresses":["stake1..."]}` gives the number that matters:
+
+- `rewards_available` is earned minus withdrawn, so it is exactly what is still
+  outstanding and can be added to a holding without double counting anything
+  already spent or recorded by hand
+- `rewards` is lifetime earned, informational
+- `total_balance` is the real on-chain balance, currently unused but the obvious
+  basis for a future "your recorded transactions say X, the chain says Y" check
+
+Everything is lovelace as a string, so nothing goes through a Double and the
+divide by 1,000,000 is exact. Verified against the live endpoint 2026-08-26.
+
+Two facts recorded in case the per-epoch endpoint is ever wanted. Epoch start is
+a pure function, `1596059091 + (epoch - 208) * 432000`, checked exact against
+epochs 208, 300, 500 and 550, so no `epoch_info` call is needed. And real
+accounts return reward types beyond staking: `leader` and `member` are income,
+but `reserves`, `treasury` and `refund` are one-off protocol payouts and a
+returned deposit, and counting those as rewards would overstate what was earned.
 
 ## Architecture
 
@@ -208,6 +228,13 @@ and `stakingQuantity` falls out of the fold rather than needing its own bookkeep
 **Room migrations are explicit and never destructive.** Unlike a cache of
 something a server owns, a transaction typed in by hand has no other copy.
 `fallbackToDestructiveMigration` would destroy the only one.
+
+**Staking is a balance, not ledger rows.** `staking_balances` holds one live
+figure per stake address, replaced on each sync. Rewards accrue continuously and
+are withdrawn in lumps, so per-epoch transactions would go stale the moment
+anything is withdrawn and would double count against a withdrawal entered by
+hand. They carry no cost basis and are valued at today's price, so they read
+wholly as gain, which is correct: they were never paid for.
 
 **Custody lives in its own table, and must.** `asset_custody` records where a
 coin is actually kept. It is deliberately not columns on `AssetEntity`, because
@@ -355,18 +382,35 @@ cut that to roughly 1.1 MB. Re-run on a machine with `cwebp` installed.
    backup, because the moment you most need to know which wallet holds your BTC
    is while setting the app up on a new phone.
 
-4. **Next.** Staking. `StakingProvider` with `CardanoKoiosProvider` first; the
-   user supplies a stake address per account and rewards import as
-   `STAKING_REWARD` rows deduplicated on `(source, externalId)`. Portfolio totals
-   already include them; asset detail already renders the principal-versus-
-   rewards split. Add a rewards-over-time chart.
+4. **Done. Staking.** `StakingProvider` with `CardanoKoiosProvider` first, plus
+   `staking_balances`. A stake address on an account produces a live outstanding
+   figure that adds to the holding and to the portfolio total.
 
-5. Stocks, and a combined dashboard. New `AssetClass.STOCK` plus new
+   **Modelled as a balance, not as ledger rows.** Rewards accrue continuously and
+   are withdrawn in lumps, so a transaction per epoch would be hundreds of rows
+   that go stale the moment anything is withdrawn, and would double count against
+   a withdrawal entered by hand. `rewards_available` is earned minus withdrawn,
+   which is precisely the amount that is still outstanding.
+
+   **Valued at today's price, never historically.** The question is "how much of
+   my ADA did I earn", not "what was my income in 2021". That also sidesteps the
+   fact that price history reaches back about two years while Cardano staking
+   goes back to 2020.
+
+   Rewards therefore carry no cost basis, so they show up wholly as gain, which
+   is correct: they were never paid for. `PortfolioBuilder` keys off the union of
+   ledger assets and staked assets, because a coin held only as accrued rewards
+   is still a real position and keying off the ledger alone would hide it.
+
+   A failed sync keeps the last known figure and stores the reason, so the UI can
+   say when it was last checked instead of showing a stale number as current.
+
+5. **Next.** Stocks, and a combined dashboard. New `AssetClass.STOCK` plus new
    `PriceSource` and `HistorySource` implementations. The core tables do not
    change. Open question deferred to then: which equity data provider, since free
    realtime equity data is materially harder to source than crypto.
 
-**Present a short plan before starting 4 or 5.** Milestones get agreed before
+**Present a short plan before starting 5.** Milestones get agreed before
 they get built, not after.
 
 ## Verified in the sandbox, 2026-08-25

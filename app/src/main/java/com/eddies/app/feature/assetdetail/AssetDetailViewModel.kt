@@ -10,11 +10,13 @@ import com.eddies.app.core.design.ChartRange
 import com.eddies.app.data.db.entity.AssetCustodyEntity
 import com.eddies.app.data.db.entity.CandleInterval
 import com.eddies.app.data.db.entity.CustodyType
+import com.eddies.app.data.db.entity.StakingBalanceEntity
 import com.eddies.app.data.price.PriceHistoryRepository
 import com.eddies.app.core.ui.IconResolver
 import com.eddies.app.data.prefs.SettingsDataStore
 import com.eddies.app.data.repo.PortfolioRepository
 import com.eddies.app.data.repo.CustodyRepository
+import com.eddies.app.data.staking.StakingRepository
 import com.eddies.app.data.repo.TransactionRepository
 import com.eddies.app.data.repo.WatchlistRepository
 import com.eddies.app.domain.Holding
@@ -46,6 +48,7 @@ data class AssetDetailUiState(
     val watched: Boolean = false,
     val custody: AssetCustodyEntity? = null,
     val custodySuggestions: List<String> = emptyList(),
+    val stakingStatus: String? = null,
 ) {
     /** Change across the visible window, which is what the chart is showing. */
     val rangeChangePct: Double?
@@ -63,6 +66,7 @@ class AssetDetailViewModel @Inject constructor(
     private val history: PriceHistoryRepository,
     private val watchlist: WatchlistRepository,
     private val custody: CustodyRepository,
+    private val staking: StakingRepository,
     private val icons: IconResolver,
 ) : ViewModel() {
 
@@ -90,9 +94,10 @@ class AssetDetailViewModel @Inject constructor(
         settings.settings,
         candles,
         combine(
-            range, scrubbed, loading, watchlist.assetIds, custody.observe(assetId),
-        ) { r, scrub, isLoading, watched, custodyRow ->
-            Extras(r, scrub, isLoading, assetId in watched, custodyRow)
+            range, scrubbed, loading, watchlist.assetIds,
+            combine(custody.observe(assetId), staking.observeBalances()) { c, balances -> c to balances },
+        ) { r, scrub, isLoading, watched, (custodyRow, balances) ->
+            Extras(r, scrub, isLoading, assetId in watched, custodyRow, stakingStatusFor(balances))
         },
     ) { holding, txs, cfg, candleRows, extras ->
         val (r, scrub, isLoading, watched, custodyRow) = extras
@@ -112,6 +117,7 @@ class AssetDetailViewModel @Inject constructor(
             watched = watched,
             custody = custodyRow,
             custodySuggestions = suggestions.value,
+            stakingStatus = extras.stakingStatus,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AssetDetailUiState())
 
@@ -165,5 +171,25 @@ class AssetDetailViewModel @Inject constructor(
         val loading: Boolean,
         val watched: Boolean,
         val custody: AssetCustodyEntity?,
+        val stakingStatus: String?,
     )
+
+    /**
+     * Says when the figure was last checked, or why it could not be.
+     *
+     * A stale staking number shown with no qualifier reads as current, and the
+     * whole point of the feature is trusting the total.
+     */
+    private fun stakingStatusFor(balances: List<StakingBalanceEntity>): String? {
+        val row = balances.firstOrNull { it.assetId == assetId } ?: return null
+        row.error?.let { return "Could not refresh: $it" }
+        if (row.syncedAt == 0L) return null
+        val ageMinutes = (System.currentTimeMillis() - row.syncedAt) / 60_000
+        return when {
+            ageMinutes < 2 -> "Checked just now"
+            ageMinutes < 60 -> "Checked $ageMinutes minutes ago"
+            ageMinutes < 60 * 24 -> "Checked ${ageMinutes / 60} hours ago"
+            else -> "Checked ${ageMinutes / 1440} days ago"
+        }
+    }
 }

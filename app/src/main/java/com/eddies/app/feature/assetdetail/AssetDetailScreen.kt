@@ -213,27 +213,47 @@ fun AssetDetailScreen(
 
         // Staking is only shown when there is any, so a coin that cannot stake
         // never carries an empty section explaining that it has none.
-        if (holding.position.stakingQuantity.signum() > 0) {
+        if (holding.stakingQuantityTotal.signum() > 0) {
             Section(
                 title = "Staking",
-                subtitle = "Earned on top of what you bought.",
+                subtitle = "Earned on top of what you bought, valued at today's price.",
             ) {
-                DetailRow(
-                    "Rewards earned",
-                    MoneyFormat.quantity(holding.position.stakingQuantity, holding.asset.decimals, state.hidden),
-                )
-                HorizontalDivider()
-                DetailRow("Rewards value", MoneyFormat.fiat(holding.stakingValue, state.currency, state.hidden))
+                if (holding.hasPendingStaking) {
+                    DetailRow(
+                        "Accruing on chain",
+                        MoneyFormat.quantity(holding.stakingPending, holding.asset.decimals, state.hidden),
+                    )
+                    HorizontalDivider()
+                }
+                if (holding.position.stakingQuantity.signum() > 0) {
+                    DetailRow(
+                        "Recorded rewards",
+                        MoneyFormat.quantity(
+                            holding.position.stakingQuantity, holding.asset.decimals, state.hidden,
+                        ),
+                    )
+                    HorizontalDivider()
+                }
+                DetailRow("Worth today", MoneyFormat.fiat(holding.stakingValue, state.currency, state.hidden))
                 HorizontalDivider()
                 DetailRow(
                     "Bought",
-                    MoneyFormat.quantity(holding.position.principalQuantity, holding.asset.decimals, state.hidden),
+                    MoneyFormat.quantity(holding.position.quantity, holding.asset.decimals, state.hidden),
                 )
                 HorizontalDivider()
                 StakingBar(
-                    principal = holding.position.principalQuantity.toDouble(),
-                    staked = holding.position.stakingQuantity.toDouble(),
+                    principal = holding.position.quantity.toDouble(),
+                    staked = holding.stakingQuantityTotal.toDouble(),
                 )
+                state.stakingStatus?.let { status ->
+                    HorizontalDivider()
+                    Text(
+                        status,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                    )
+                }
             }
         }
 

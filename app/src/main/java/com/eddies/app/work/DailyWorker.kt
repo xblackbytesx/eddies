@@ -13,6 +13,7 @@ import com.eddies.app.data.price.FxRepository
 import com.eddies.app.data.price.PriceRepository
 import com.eddies.app.data.repo.PortfolioBackfill
 import com.eddies.app.data.repo.PortfolioRepository
+import com.eddies.app.data.staking.StakingRepository
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.flow.first
@@ -37,11 +38,16 @@ class DailyWorker @AssistedInject constructor(
     private val prices: PriceRepository,
     private val fx: FxRepository,
     private val backfill: PortfolioBackfill,
+    private val staking: StakingRepository,
 ) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
         return try {
             fx.refreshIfStale()
+
+            // Before the snapshot, so today's recorded total includes rewards
+            // that accrued since the last run.
+            runCatching { staking.syncAll() }
 
             // first() rather than collect: this needs one settled value, and the
             // summary flow never completes on its own.
