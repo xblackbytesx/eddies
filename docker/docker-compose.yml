@@ -51,9 +51,6 @@ services:
       - gradle-cache:/opt/gradle-home
     entrypoint: ["bash"]
 
-volumes:
-  gradle-cache:
-
   demo:
     image: eddies-build
     build:
@@ -63,3 +60,6 @@ volumes:
       - ..:/workspace
       - gradle-cache:/opt/gradle-home
     command: bash docker/run-gradle.sh :app:assembleDemoDebug
+
+volumes:
+  gradle-cache:

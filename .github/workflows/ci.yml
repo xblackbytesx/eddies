@@ -24,6 +24,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # CI builds natively, so nothing here would otherwise ever parse the
+      # compose file that is the actual developer entry point. A demo service
+      # once landed under the volumes key and shipped: the build was green and
+      # every `make` target was broken.
+      - name: Validate the build container definition
+        run: |
+          docker compose -f docker/docker-compose.yml config -q
+          services=$(docker compose -f docker/docker-compose.yml config --services)
+          for target in build build-release test lint shell demo; do
+            echo "$services" | grep -qx "$target" \
+              || { echo "compose has no '$target' service, but the Makefile invokes it"; exit 1; }
+          done
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
