@@ -14,7 +14,7 @@ import javax.inject.Singleton
  * per row while a list is scrolling.
  */
 @Singleton
-class IconResolver @Inject constructor(@ApplicationContext private val context: Context) {
+class IconResolver @Inject constructor(@param:ApplicationContext private val context: Context) {
 
     private val bySlug: Map<String, String> by lazy {
         runCatching {

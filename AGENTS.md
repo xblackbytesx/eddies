@@ -518,6 +518,31 @@ worth not reintroducing: `String.format` without an explicit `Locale.US` in char
 axis labels (it would disagree with MoneyFormat on the same screen), and
 `roundIcon` pointing at `ic_launcher` rather than `ic_launcher_round`.
 
+### Kotlin compiler warnings are zero, and should stay zero
+
+Unlike lint, the Kotlin build is silent. Keep it that way: it is the only reason
+a new warning is worth reading. Ten deprecation warnings were tolerated for a
+while and were hiding a real one, a missing `@OptIn(FlowPreview::class)` on the
+`sample()` that throttles the price feed, which nobody noticed until the noise
+was cleared.
+
+Two things keep it silent and are easy to undo by accident:
+
+- `hiltViewModel` comes from `androidx.hilt.lifecycle.viewmodel.compose`, not
+  `androidx.hilt.navigation.compose`. androidx.hilt 1.3.0 moved it and
+  deprecated the old copy, and `hilt-navigation-compose` is not a dependency at
+  all so the deprecated import cannot come back by autocomplete.
+- Hilt qualifiers on constructor parameters are written `@param:ApplicationContext`.
+  Kotlin 2.2 warns that a bare annotation will start applying to the field too.
+  The explicit target pins current behaviour; the generated
+  `*_Factory` still carries
+  `@QualifierMetadata("dagger.hilt.android.qualifiers.ApplicationContext")`,
+  which is how to check it is still wired rather than merely compiling.
+
+Icons use the `AutoMirrored` variants where one exists. The app declares
+`supportsRtl="true"`, so a directional icon that does not flip is a real defect
+in a right-to-left locale, not a style preference.
+
 ## Coin icons
 
 `scripts/refresh-icons.sh` regenerates `assets/coins/` and `assets/asset_seed.json`.
