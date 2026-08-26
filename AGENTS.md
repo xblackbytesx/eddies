@@ -23,9 +23,12 @@ make release # release APKs (signed if keystore.properties/env present)
 make shell   # container shell for one-off gradle tasks
 ```
 
-After changing a migration, also run `scripts/verify-migrations.sh`. Migration
-SQL is a string: the compiler cannot check it and the JVM suite cannot execute
-it, so it is the one part of this app that ships unverified unless you run that.
+After changing a migration, also run `scripts/verify-migrations.sh`. After
+changing anything the duplicate merge runs, `scripts/verify-merge.sh`. Both exist
+for the same reason: SQL in a `@Query` or an `execSQL` is a string, so the
+compiler cannot check it and the JVM suite cannot execute it. That is the part of
+this app that ships unverified unless you run those. Both need a sqlite-jdbc jar
+in `SQLITE_JAR`.
 
 Definition of done: `make test` passes, and for anything touching UI or the
 build, `make build` produces an APK. **Check the timestamp it prints.** Never
@@ -274,8 +277,36 @@ ISIN, so there is no choosing a euro-denominated one: `IE00B4L5Y983` resolves to
 different venue's prints, and the asset detail screen says so rather than letting
 the chart quietly disagree with the live price above it.
 
-Asset ids are `stock:TRADEGATE:<ISIN>`. Tradegate has no tickers, which is why it
-gets its own search tab: a name query could never work there.
+**An ISIN already held always resolves to that same holding.** `resolveTradegate`
+looks the ISIN up in `asset_source_refs` before doing anything else and reuses
+whatever asset carries it, keeping that asset's existing name and symbol. This is
+not an optimisation, it is the identity rule: Yahoo's search returns several rows
+for some ISINs (a real listing plus a synthetic `<ISIN>.SG` one) in an order
+nothing guarantees, so deriving the id from whatever came back first would mint a
+second holding for an ISIN already in the portfolio. Measured: `IE00BK5BQT80` and
+`IE00BFY0GT14` both return two rows; an ISIN Yahoo does not index returns none,
+so there is at least no fuzzy fallback to an unrelated fund.
+
+**A Tradegate holding takes the id of the listing its ISIN resolves to**, so
+`IE00B4L5Y983` added through the Tradegate tab is `stock:LONDON:IWDA.L`, the same
+id the stock search would produce, with a `TRADEGATE` row in `asset_source_refs`
+carrying the ISIN. Only when Yahoo cannot resolve the ISIN does it fall back to
+`stock:TRADEGATE:<ISIN>`.
+
+It did not start that way. Ids were minted per venue on the reasoning that a
+venue with its own prices is its own listing, and it is wrong: one instrument
+bought partly through the Tradegate tab and partly through the stock search
+became two holdings, so the position, cost basis and allocation were all wrong
+while every screen looked fine. See "Merging duplicate holdings" below for the
+repair path for ledgers written before the change.
+
+The consequence for anything reading the id: **the id no longer says where the
+price comes from.** Route on a `TRADEGATE` source ref, never on
+`AssetIds.exchangeOf(id) == "TRADEGATE"`. `PriceRepository` and the asset detail
+chart caveat both do this.
+
+Tradegate still gets its own search tab: it has no tickers, so a name query could
+never work there.
 
 ### Koios, for Cardano staking
 
@@ -415,12 +446,53 @@ and `stakingQuantity` falls out of the fold rather than needing its own bookkeep
 something a server owns, a transaction typed in by hand has no other copy.
 `fallbackToDestructiveMigration` would destroy the only one.
 
-**A venue with its own prices is its own listing.** `stock:TRADEGATE:<ISIN>` is
-not the same asset as `stock:AMSTERDAM:ASML.AS`: the prices genuinely differ, and
-that is where the shares actually are. `asset_source_refs` carries both the
-Tradegate ISIN and the Yahoo symbol for one asset, which is what lets live prices
-and history come from different places. That table has existed since v1 for
+**One instrument is one asset, whatever venue it was added through.** The id
+comes from the instrument, and where its price comes from lives in
+`asset_source_refs`: one asset can carry a Tradegate ISIN for live prices and a
+Yahoo symbol for history at the same time. That table has existed since v1 for
 exactly this and went unused until Tradegate needed it.
+
+This replaced the opposite rule, "a venue with its own prices is its own
+listing", which was defensible in the abstract and wrong in practice: the user
+added the same ETF through both the Tradegate tab and the stock search and got
+two holdings, one with one purchase and one with two, instead of one with three.
+Nothing looked broken. The position, the cost basis and the allocation ring were
+simply all wrong. Prices at two venues do differ slightly; being off by a spread
+on one holding is worth far less than splitting a position in half.
+
+**Merging duplicate holdings is user-initiated, and never a migration.**
+Settings > Data > Merge duplicate holdings finds them (`DuplicateFinder`, pure
+and tested) and `AssetMergeRepository` folds one into the other in a single
+`withTransaction`. A migration was the obvious move and is the wrong one: the
+match is a heuristic over the user's own data, and getting it wrong welds two
+real positions together with no undo and no prompt. So the screen counts every
+row that would move, names the ids, and waits.
+
+**The ISIN outranks every other signal, in both directions.** Two holdings with
+different ISINs are never grouped, whatever their tickers say, and two holdings
+with the same ISIN are always grouped, whatever their tickers say. Only where no
+ISIN is known does matching fall back to asset class plus ticker. Never on name:
+two share classes of one fund read almost identically.
+
+That guard is not theoretical. One fund family can list many funds (core,
+screened, factor-weighted and so on) that are entirely different products,
+and a ticker-only rule was one tap away from welding them into one position. The
+merge screen shows each entry's ISIN for the same reason: the suggestion has
+to be checkable, not merely trustworthy. The asset with
+the most transactions is kept, so the fewest rows move.
+
+`scripts/verify-merge.sh` seeds the real duplicate into a real SQLite database
+built from the exported schema and replays the merge, with the SQL extracted from
+`Daos.kt` and **the order extracted from `AssetMergeRepository.kt`**, because the
+order is half the correctness. It found two defects on its first run:
+
+- `asset_source_refs` cascade-deletes with its asset, so moving the Tradegate
+  routing after the asset delete loses it and the holding silently stops being
+  priced from the venue it is held at.
+- `UPDATE OR IGNORE` leaves a row behind when the target already has an
+  equivalent one, and every other table involved has no foreign key to cascade it
+  away. A custody entry outlived the asset it described. Each reassign is now
+  followed by a clear.
 
 **Migration SQL is verified by executing it, not by reading it.**
 `scripts/verify-migrations.sh` extracts every `execSQL` string **from the source
@@ -689,7 +761,15 @@ cut that to roughly 1.1 MB. Re-run on a machine with `cwebp` installed.
    written and read but nothing ever branched on it; it now separates "never
    started" from "sold everything", which want different empty states.
 
-9. **Parked.** Dividend reinvestment (DRIP), where a dividend buys shares rather
+9. **Done. One instrument, one holding.** The same ETF added through the
+   Tradegate tab and through the stock search was two holdings. Fixed at the
+   root, so it cannot happen again, plus a merge screen to repair ledgers already
+   written that way, plus `verify-merge.sh` to prove the merge does not lose
+   anything. Asset detail also grew an "+ Add" button on its transactions
+   section: adding a second purchase of something already held meant searching
+   for it again from the FAB.
+
+10. **Parked.** Dividend reinvestment (DRIP), where a dividend buys shares rather
    than paying cash. It needs per-position reinvestment settings and
    reconciliation against what the broker actually did, and the ledger already
    represents it as a DIVIDEND plus a BUY for anyone who wants it today.
@@ -701,12 +781,12 @@ cut that to roughly 1.1 MB. Re-run on a machine with `cwebp` installed.
    and a per-year 1 January valuation, which several European wealth-tax
    regimes ask for and which the daily snapshots can already answer exactly.
 
-**Present a short plan before starting 9.** Milestones get agreed before
+**Present a short plan before starting 10.** Milestones get agreed before
 they get built, not after.
 
 ## Verified in the sandbox, 2026-08-26
 
-`:app:testFullDebugUnitTest` (165 tests) passes, along with `lintFullDebug`
+`:app:testFullDebugUnitTest` (189 tests) passes, along with `lintFullDebug`
 (0 errors), `assembleFullDebug`, `assembleDemoDebug` and `assembleFullRelease`.
 Release splits are roughly 15 MB (arm64-v8a), 13.6 MB (armeabi-v7a), 15.7 MB
 (x86_64) and 28.8 MB (universal). The release APK was unzipped and checked to
@@ -714,7 +794,10 @@ contain 389 coin icons, `asset_seed.json` and `libsqlcipher.so` for every ABI,
 and every native library was confirmed 16 KB aligned.
 
 `scripts/verify-migrations.sh` replays the whole migration chain against real
-SQLite and matches a fresh database.
+SQLite and matches a fresh database. `scripts/verify-merge.sh` merges a seeded
+duplicate and confirms 3 buys across 2 entries become 3 buys on 1 with the
+Tradegate routing intact. Both were checked to actually fail: reordering the
+source-ref move after the asset delete turns the merge run red.
 
 Every market-data contract above was checked against the live endpoints: Kraken
 (including holding a real WebSocket open), Binance, CoinPaprika, Frankfurter,

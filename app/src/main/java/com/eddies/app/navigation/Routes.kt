@@ -16,3 +16,6 @@ import kotlinx.serialization.Serializable
 
 /** The whole ledger, across every asset. */
 @Serializable data object TransactionsRoute
+
+/** Repairs one instrument that was recorded as two holdings. */
+@Serializable data object MergeDuplicatesRoute

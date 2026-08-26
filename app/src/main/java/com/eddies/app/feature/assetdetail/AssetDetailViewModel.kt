@@ -49,6 +49,7 @@ data class AssetDetailUiState(
     val custody: AssetCustodyEntity? = null,
     val custodySuggestions: List<String> = emptyList(),
     val stakingStatus: String? = null,
+    val pricedByTradegate: Boolean = false,
 ) {
     /** Change across the visible window, which is what the chart is showing. */
     val rangeChangePct: Double?
@@ -68,6 +69,7 @@ class AssetDetailViewModel @Inject constructor(
     private val custody: CustodyRepository,
     private val staking: StakingRepository,
     private val icons: IconResolver,
+    private val sourceRefs: com.eddies.app.data.db.dao.AssetSourceRefDao,
 ) : ViewModel() {
 
     val assetId: String = savedStateHandle.toRoute<AssetDetailRoute>().assetId
@@ -75,6 +77,18 @@ class AssetDetailViewModel @Inject constructor(
     private val range = MutableStateFlow(ChartRange.MONTH)
     private val scrubbed = MutableStateFlow<ChartPoint?>(null)
     private val loading = MutableStateFlow(false)
+
+    /**
+     * Whether this holding is priced from Tradegate, which decides whether the
+     * chart carries a caveat.
+     *
+     * Read from the source refs and not from the asset id: a Tradegate holding
+     * takes the id of the listing its ISIN resolves to, so the id no longer says
+     * anything about where the live price comes from.
+     *
+     * Declared above `state` because `state` reads it while being constructed.
+     */
+    private val pricedByTradegate = MutableStateFlow(false)
 
     /**
      * Candles for the selected range, straight from the cache.
@@ -95,9 +109,13 @@ class AssetDetailViewModel @Inject constructor(
         candles,
         combine(
             range, scrubbed, loading, watchlist.assetIds,
-            combine(custody.observe(assetId), staking.observeBalances()) { c, balances -> c to balances },
-        ) { r, scrub, isLoading, watched, (custodyRow, balances) ->
-            Extras(r, scrub, isLoading, assetId in watched, custodyRow, stakingStatusFor(balances))
+            combine(
+                custody.observe(assetId),
+                staking.observeBalances(),
+                pricedByTradegate,
+            ) { c, balances, tdg -> Triple(c, balances, tdg) },
+        ) { r, scrub, isLoading, watched, (custodyRow, balances, tdg) ->
+            Extras(r, scrub, isLoading, assetId in watched, custodyRow, stakingStatusFor(balances), tdg)
         },
     ) { holding, txs, cfg, candleRows, extras ->
         val (r, scrub, isLoading, watched, custodyRow) = extras
@@ -118,10 +136,16 @@ class AssetDetailViewModel @Inject constructor(
             custody = custodyRow,
             custodySuggestions = suggestions.value,
             stakingStatus = extras.stakingStatus,
+            pricedByTradegate = extras.pricedByTradegate,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AssetDetailUiState())
 
     init {
+        viewModelScope.launch {
+            pricedByTradegate.value = sourceRefs.forAssets(listOf(assetId))
+                .any { it.source == com.eddies.app.domain.PriceSourceId.TRADEGATE }
+        }
+
         // Fetch on first view, per range. Nothing is prefetched for coins the
         // user never opens.
         viewModelScope.launch {
@@ -172,6 +196,7 @@ class AssetDetailViewModel @Inject constructor(
         val watched: Boolean,
         val custody: AssetCustodyEntity?,
         val stakingStatus: String?,
+        val pricedByTradegate: Boolean,
     )
 
     /**

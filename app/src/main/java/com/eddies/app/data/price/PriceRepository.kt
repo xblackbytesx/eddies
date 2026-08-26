@@ -58,6 +58,7 @@ class PriceRepository @Inject constructor(
     private val binance: BinanceWsSource,
     private val aggregator: AggregatorSource,
     private val stocks: com.eddies.app.data.stocks.StockPriceSource,
+    private val sourceRefDao: com.eddies.app.data.db.dao.AssetSourceRefDao,
     private val tradegate: com.eddies.app.data.stocks.TradegateSource,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + kotlinx.coroutines.Dispatchers.IO)
@@ -141,9 +142,14 @@ class PriceRepository @Inject constructor(
         // long tail: most coins are not listed on any single exchange.
         val remaining = cryptoTickers.filterKeys { it !in liveSymbols.keys }
         val pollSymbols = aggregator.resolve(remaining, baseCurrency)
-        // Tradegate is its own venue with its own prices, so it is resolved
-        // first and whatever it does not carry falls through to Yahoo.
-        val tradegateSymbols = tradegate.resolve(stockTickers, baseCurrency)
+        // Which assets Tradegate prices is recorded in asset_source_refs, not
+        // encoded in the id. An instrument held at Tradegate is the same
+        // instrument Yahoo lists, so the id is the listing's and the venue is a
+        // ref alongside it.
+        val tradegateIsins = sourceRefDao.forAssets(stockTickers.keys.toList())
+            .filter { it.source == PriceSourceId.TRADEGATE }
+            .associate { it.assetId to it.sourceSymbol }
+        val tradegateSymbols = tradegate.resolve(tradegateIsins, baseCurrency)
         val stockSymbols = stocks.resolve(
             stockTickers.filterKeys { it !in tradegateSymbols.keys },
             baseCurrency,

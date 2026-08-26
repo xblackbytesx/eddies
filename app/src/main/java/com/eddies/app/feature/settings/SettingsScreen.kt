@@ -43,6 +43,7 @@ fun SettingsScreen(
     onOpenTransactions: () -> Unit,
     onOpenAccounts: () -> Unit,
     onOpenAbout: () -> Unit,
+    onOpenMergeDuplicates: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
@@ -254,6 +255,12 @@ fun SettingsScreen(
                 title = "Backup and restore",
                 subtitle = "Encrypted portfolio file, or a plain CSV.",
                 onClick = onOpenBackup,
+            )
+            HorizontalDivider()
+            NavRow(
+                title = "Merge duplicate holdings",
+                subtitle = "One instrument showing as two entries. Nothing moves until you confirm.",
+                onClick = onOpenMergeDuplicates,
             )
             HorizontalDivider()
             NavRow(

@@ -67,14 +67,14 @@ class TradegateSource @Inject constructor(
     override val id = PriceSourceId.TRADEGATE
     override val isRealtime = false
 
+    /**
+     * [tickers] maps an asset id to the ISIN Tradegate knows it by, taken from
+     * asset_source_refs. The caller has already decided which assets those are,
+     * because that is a property of where the shares are held rather than of the
+     * asset id.
+     */
     override suspend fun resolve(tickers: Map<String, String>, baseCurrency: String): Map<String, ResolvedSymbol> =
-        tickers
-            .filterKeys { AssetIds.exchangeOf(it) == EXCHANGE }
-            .mapValues { (assetId, _) ->
-                // The ticker for a Tradegate listing is its ISIN, which is what
-                // the id already carries.
-                ResolvedSymbol(assetId, AssetIds.tickerOf(assetId), CURRENCY)
-            }
+        tickers.mapValues { (assetId, isin) -> ResolvedSymbol(assetId, isin, CURRENCY) }
 
     override fun stream(symbols: Map<String, ResolvedSymbol>): Flow<PriceTick> = flow {
         if (symbols.isEmpty()) return@flow
