@@ -26,6 +26,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.eddies.app.core.ui.AssetIcon
 import com.eddies.app.core.ui.EmptyHint
+import com.eddies.app.core.ui.LoadingPlaceholder
 import com.eddies.app.data.repo.UserSelectableTxTypes
 import com.eddies.app.data.repo.label
 import com.eddies.app.domain.Asset
@@ -65,6 +66,11 @@ fun TransactionsScreen(
                     )
                 }
             }
+        }
+
+        if (!state.loaded) {
+            LoadingPlaceholder()
+            return@Column
         }
 
         if (state.isEmpty) {

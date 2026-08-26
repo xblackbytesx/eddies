@@ -335,6 +335,18 @@ verified on a device.
 
 ## Invariants
 
+**A default UI state must be distinguishable from real data.** Every screen
+carries a `loaded` flag that only the real transform sets, and renders
+`LoadingPlaceholder` until then. Without it the default `PortfolioUiState` is an
+empty portfolio, indistinguishable from a genuinely empty one, so a populated
+database rendered "nothing here yet" and a net worth of zero for a frame on every
+cold start. The splash is dismissed as soon as settings load, which is well
+before the database has answered, so that window is real and visible.
+
+`LoadingPlaceholder` shows nothing at all for the first 400 ms on purpose. A
+spinner that appears and vanishes inside a few hundred milliseconds is its own
+flicker; only a genuinely slow load earns feedback.
+
 **Animations are keyed on identity, never on values.** The allocation ring's
 reveal is keyed on which holdings are present, not on their sizes. Keying it on
 the sizes meant every price tick built a fresh `Animatable` at zero and restarted

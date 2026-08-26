@@ -26,6 +26,8 @@ data class InsightsUiState(
     val perClass: List<ClassTotals> = emptyList(),
     val advanced: Boolean = false,
     val hidden: Boolean = false,
+    /** False until the database has answered. See PortfolioUiState.loaded. */
+    val loaded: Boolean = false,
 )
 
 @HiltViewModel
@@ -58,6 +60,7 @@ class InsightsViewModel @Inject constructor(
             ),
             advanced = cfg.advancedMode,
             hidden = cfg.hideBalances,
+            loaded = true,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), InsightsUiState())
 }

@@ -38,6 +38,7 @@ import com.eddies.app.core.design.ChartRange
 import com.eddies.app.core.design.InteractiveLineChart
 import com.eddies.app.core.ui.AssetIcon
 import com.eddies.app.core.ui.EmptyHint
+import com.eddies.app.core.ui.LoadingPlaceholder
 import com.eddies.app.core.ui.PnlText
 import com.eddies.app.core.ui.StaleBadge
 import com.eddies.app.domain.Holding
@@ -69,6 +70,11 @@ fun PortfolioScreen(
         ),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
+        if (!state.loaded) {
+            item { LoadingPlaceholder() }
+            return@LazyColumn
+        }
+
         if (state.showScopeSelector) {
             item {
                 Row(

@@ -14,11 +14,17 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.TrendingDown
 import androidx.compose.material.icons.automirrored.filled.TrendingFlat
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -211,5 +217,42 @@ fun EmptyHint(text: String, modifier: Modifier = Modifier) {
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+    }
+}
+
+/**
+ * What a screen shows before its first real data has arrived.
+ *
+ * Renders nothing at all for the first moment. A spinner that appears and
+ * vanishes inside a few hundred milliseconds is its own flicker, and on a warm
+ * start the database answers faster than the eye notices. Only a genuinely slow
+ * load, a large ledger or a cold SQLCipher open, earns any feedback.
+ *
+ * The reason this exists rather than just letting the empty state show: the
+ * default UI state of an empty portfolio is indistinguishable from a real one,
+ * so a populated database briefly rendered "nothing here yet" and a net worth of
+ * zero on every cold start.
+ */
+@Composable
+fun LoadingPlaceholder(
+    modifier: Modifier = Modifier,
+    showSpinnerAfterMs: Long = 400,
+) {
+    var showSpinner by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(showSpinnerAfterMs)
+        showSpinner = true
+    }
+
+    Box(
+        modifier = modifier.fillMaxWidth().padding(48.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (showSpinner) {
+            CircularProgressIndicator(
+                strokeWidth = 2.dp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }

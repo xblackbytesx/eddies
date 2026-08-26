@@ -27,6 +27,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.eddies.app.core.design.AllocationDonut
 import com.eddies.app.core.ui.AssetIcon
 import com.eddies.app.core.ui.EmptyHint
+import com.eddies.app.core.ui.LoadingPlaceholder
 import com.eddies.app.core.ui.PnlText
 import com.eddies.app.core.ui.Section
 import com.eddies.app.domain.CustodyGrouper
@@ -50,6 +51,11 @@ fun InsightsScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val currency = state.summary.currency
+
+    if (!state.loaded) {
+        LoadingPlaceholder()
+        return
+    }
 
     if (state.summary.holdings.isEmpty()) {
         EmptyHint("Add a position to see how your portfolio breaks down.")
