@@ -121,6 +121,10 @@ class RealDemoSeeder @Inject constructor(
         settings.setHideBalances(false)
         settings.setAdvancedMode(true)
         settings.setAppLockEnabled(false)
+        // Cosmetic only: the demo policy ignores this outright. Set so a
+        // screenshot of the settings screen does not show a toggle that is being
+        // overridden underneath it.
+        settings.setHideInRecents(false)
         settings.setOnboarded()
     }
 }

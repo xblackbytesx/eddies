@@ -58,11 +58,31 @@ applicationId means a different data directory, so the demo build cannot reach
 the real ledger at all. That isolation is enforced by the operating system rather
 than by us remembering.
 
-**No conditionals anywhere.** `DemoSeeder` is an interface in `main` with a
-no-op implementation in `src/full` and the real one in `src/demo`, bound by a
-Hilt module in each source set. Nothing in the app asks whether it is in demo
-mode. Verified: `DemoPortfolio` does not appear in the full build's dex at all,
-so it is not merely unreachable, it is absent.
+**No conditionals anywhere.** Anything that differs is an interface in `main`
+with one implementation in `src/full` and another in `src/demo`, bound by a Hilt
+module in each source set. Nothing in the app ever asks whether it is in demo
+mode. There are two so far:
+
+- `DemoSeeder`, which writes the fake portfolio or does nothing.
+- `WindowSecurityPolicy`, which decides FLAG_SECURE. **The demo build never sets
+  it**, whatever the "hide from recent apps" setting says. FLAG_SECURE blocks
+  screenshots outright, not just the recents thumbnail, which makes the demo
+  useless for its only purpose, and there are no real holdings in it to protect.
+  Doing this by defaulting the setting off in the seeder would not hold: the
+  seeder runs once on first launch, so an existing install would stay locked out,
+  and the setting could be switched back at any time.
+
+`scripts/verify-flavours.sh` proves the separation by extracting both APKs and
+checking that each carries only its own implementations. The claim is not that
+demo code is unreachable in a release, it is that it is not in the APK at all,
+and CI runs this on every push.
+
+That script exists because the check was first done by hand and was worthless:
+a relative APK path after a `cd`, with stderr sent to `/dev/null`, so the
+extraction failed, the grep searched files that did not exist, everything came
+back "absent", and that was reported as verification. It happened to be true. It
+had not been shown. The script asserts a control class is present precisely so a
+broken extraction cannot pass as a clean result.
 
 **Only the transactions are invented.** Prices, staking, Yahoo history, splits
 and cost basis all run through the real code against the real feeds, which is
