@@ -4,6 +4,8 @@ import com.eddies.app.data.db.entity.CandleInterval
 import com.eddies.app.data.db.entity.PortfolioSnapshotEntity
 import com.eddies.app.data.prefs.SettingsDataStore
 import com.eddies.app.data.price.PriceHistoryRepository
+import com.eddies.app.domain.AssetClass
+import com.eddies.app.domain.AssetIds
 import com.eddies.app.domain.CostBasisMethod
 import com.eddies.app.domain.PositionCalculator
 import com.eddies.app.domain.Transaction
@@ -36,6 +38,7 @@ class PortfolioBackfill @Inject constructor(
     private val history: PriceHistoryRepository,
     private val snapshotDao: com.eddies.app.data.db.dao.PortfolioSnapshotDao,
     private val settings: SettingsDataStore,
+    private val corporateActions: com.eddies.app.data.db.dao.CorporateActionDao,
 ) {
 
     /**
@@ -58,6 +61,10 @@ class PortfolioBackfill @Inject constructor(
             runCatching { history.ensureFresh(assetId, CandleInterval.DAY) }
         }
 
+        val splitsByAsset = corporateActions.all()
+            .groupBy { it.assetId }
+            .mapValues { (_, rows) -> rows.map { it.toDomain() } }
+
         val closes = history.dailyCloses(assetIds, firstTx)
         if (closes.isEmpty()) return@withContext 0
 
@@ -78,8 +85,8 @@ class PortfolioBackfill @Inject constructor(
             // Only what had actually happened by that day.
             val upToDay = txs.filter { it.timestamp <= cutoff }
 
-            var value = BigDecimal.ZERO
-            var cost = BigDecimal.ZERO
+            val perClassValue = HashMap<AssetClass, BigDecimal>()
+            val perClassCost = HashMap<AssetClass, BigDecimal>()
             for ((assetId, assetTxs) in upToDay.groupBy(Transaction::assetId)) {
                 val position = PositionCalculator.fold(
                     txs = assetTxs,
@@ -87,18 +94,28 @@ class PortfolioBackfill @Inject constructor(
                     baseCurrency = cfg.baseCurrency,
                     includeFeesInBasis = cfg.includeFeesInBasis,
                     assetId = assetId,
+                    // Without these, a share count before an old split is wrong
+                    // for every day of the replayed history.
+                    splits = splitsByAsset[assetId].orEmpty(),
                 )
-                cost += position.costBasis
+                val assetClass = AssetIds.classOf(assetId) ?: AssetClass.CRYPTO
+                perClassCost[assetClass] = (perClassCost[assetClass] ?: BigDecimal.ZERO) + position.costBasis
                 val close = byAssetDay[assetId]?.get(key)
-                if (close != null) value += position.quantity * close
+                if (close != null) {
+                    perClassValue[assetClass] =
+                        (perClassValue[assetClass] ?: BigDecimal.ZERO) + position.quantity * close
+                }
             }
 
-            snapshots += PortfolioSnapshotEntity(
-                day = key,
-                totalValue = value.toPlainString(),
-                costBasis = cost.toPlainString(),
-                currency = cfg.baseCurrency,
-            )
+            for (assetClass in (perClassValue.keys + perClassCost.keys)) {
+                snapshots += PortfolioSnapshotEntity(
+                    day = key,
+                    assetClass = assetClass,
+                    totalValue = (perClassValue[assetClass] ?: BigDecimal.ZERO).toPlainString(),
+                    costBasis = (perClassCost[assetClass] ?: BigDecimal.ZERO).toPlainString(),
+                    currency = cfg.baseCurrency,
+                )
+            }
             day = day.plusMillis(DAY_MS)
         }
 

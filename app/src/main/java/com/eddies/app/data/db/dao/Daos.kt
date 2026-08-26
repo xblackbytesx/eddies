@@ -9,9 +9,11 @@ import com.eddies.app.data.db.entity.AccountEntity
 import com.eddies.app.data.db.entity.AssetEntity
 import com.eddies.app.data.db.entity.AssetCustodyEntity
 import com.eddies.app.data.db.entity.AssetSourceRefEntity
+import com.eddies.app.domain.AssetClass
 import com.eddies.app.data.db.entity.CandleInterval
 import com.eddies.app.data.db.entity.PriceCandleEntity
 import com.eddies.app.data.db.entity.PriceLatestEntity
+import com.eddies.app.data.db.entity.SplitEventEntity
 import com.eddies.app.data.db.entity.StakingBalanceEntity
 import com.eddies.app.data.db.entity.FxRateEntity
 import com.eddies.app.data.db.entity.PortfolioSnapshotEntity
@@ -234,6 +236,11 @@ interface PortfolioSnapshotDao {
     @Query("SELECT * FROM portfolio_snapshots WHERE day >= :fromDay ORDER BY day")
     fun observeFrom(fromDay: String): Flow<List<PortfolioSnapshotEntity>>
 
+    @Query(
+        "SELECT * FROM portfolio_snapshots WHERE day >= :fromDay AND assetClass = :assetClass ORDER BY day",
+    )
+    fun observeFrom(fromDay: String, assetClass: AssetClass): Flow<List<PortfolioSnapshotEntity>>
+
     @Query("SELECT * FROM portfolio_snapshots ORDER BY day")
     suspend fun all(): List<PortfolioSnapshotEntity>
 
@@ -303,4 +310,19 @@ interface StakingDao {
     /** Drops rows whose account is gone, so a deleted wallet stops inflating totals. */
     @Query("DELETE FROM staking_balances WHERE accountId NOT IN (SELECT id FROM accounts)")
     suspend fun pruneOrphans()
+}
+
+@Dao
+interface CorporateActionDao {
+    @Upsert
+    suspend fun upsert(events: List<SplitEventEntity>)
+
+    @Query("SELECT * FROM corporate_actions WHERE assetId = :assetId ORDER BY timestamp")
+    suspend fun forAsset(assetId: String): List<SplitEventEntity>
+
+    @Query("SELECT * FROM corporate_actions ORDER BY timestamp")
+    fun observeAll(): Flow<List<SplitEventEntity>>
+
+    @Query("SELECT * FROM corporate_actions ORDER BY timestamp")
+    suspend fun all(): List<SplitEventEntity>
 }

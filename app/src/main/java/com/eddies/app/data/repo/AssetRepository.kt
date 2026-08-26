@@ -39,6 +39,7 @@ class AssetRepository @Inject constructor(
     private val assetDao: AssetDao,
     private val settings: SettingsDataStore,
     private val aggregator: AggregatorSource,
+    private val yahoo: com.eddies.app.data.stocks.YahooApi,
     private val json: Json,
 ) {
 
@@ -94,6 +95,23 @@ class AssetRepository @Inject constructor(
             assetDao.upsert(remote.map { it.toEntity() })
         }
         return remote
+    }
+
+    /**
+     * Shares, which are always looked up online.
+     *
+     * No offline seed for these: there are tens of thousands of listings across
+     * dozens of exchanges, and bundling a useful subset is not possible the way
+     * it is for the few hundred coins that matter. Kept as a separate call so
+     * the coin search stays offline and private by default, and a stock lookup
+     * is an explicit act.
+     */
+    suspend fun searchStocks(term: String): List<Asset> {
+        val trimmed = term.trim()
+        if (trimmed.length < 2) return emptyList()
+        val results = yahoo.search(trimmed)
+        if (results.isNotEmpty()) assetDao.upsert(results.map { it.toEntity() })
+        return results
     }
 
     suspend fun setTracked(assetId: String, tracked: Boolean) = assetDao.setTracked(assetId, tracked)

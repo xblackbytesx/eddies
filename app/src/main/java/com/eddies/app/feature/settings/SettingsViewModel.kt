@@ -23,6 +23,7 @@ data class SettingsUiState(
     val settings: AppSettings = AppSettings(),
     val currencies: List<String> = FxRepository.ALL_CURRENCIES,
     val geckoKeyDraft: String = "",
+    val stockKeyDraft: String = "",
     val message: String? = null,
 )
 
@@ -33,14 +34,15 @@ class SettingsViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val geckoDraft = MutableStateFlow("")
+    private val stockDraft = MutableStateFlow("")
     private val message = MutableStateFlow<String?>(null)
 
     val state: StateFlow<SettingsUiState> = combine(
         settings.settings,
         geckoDraft,
-        message,
-    ) { cfg, draft, msg ->
-        SettingsUiState(settings = cfg, geckoKeyDraft = draft, message = msg)
+        combine(stockDraft, message) { s, m -> s to m },
+    ) { cfg, draft, (stock, msg) ->
+        SettingsUiState(settings = cfg, geckoKeyDraft = draft, stockKeyDraft = stock, message = msg)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SettingsUiState())
 
     fun setThemeMode(m: ThemeMode) = launch { settings.setThemeMode(m) }
@@ -61,6 +63,18 @@ class SettingsViewModel @Inject constructor(
     fun setHideInRecents(v: Boolean) = launch { settings.setHideInRecents(v) }
 
     fun setGeckoDraft(v: String) { geckoDraft.value = v }
+    fun setStockKeyDraft(v: String) { stockDraft.value = v }
+
+    fun saveStockKey() = launch {
+        settings.setStockApiKey(stockDraft.value.trim())
+        stockDraft.value = ""
+        message.value = "Stock API key saved."
+    }
+
+    fun clearStockKey() = launch {
+        settings.setStockApiKey("")
+        message.value = "Stock API key removed."
+    }
 
     fun saveGeckoKey() = launch {
         settings.setCoinGeckoKey(geckoDraft.value.trim())

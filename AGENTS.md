@@ -137,6 +137,41 @@ more. Nothing in the UI pretends otherwise; the chart starts where the data does
 Both delta cleanly: Kraken takes `since` in seconds, Binance `startTime` in
 millis. A seven-day delta is about 640 bytes against 61 KB for the full pull.
 
+### Yahoo Finance, for shares. Unofficial, and the user agent is load-bearing
+
+`query1.finance.yahoo.com/v8/finance/chart/<symbol>`, keyless. It returns each
+listing's own currency, its exchange, historical bars, and the split and
+dividend events, which is everything the stock side needs from one host.
+
+It is an **unofficial** endpoint and can change without notice. That is why
+Settings offers an optional Finnhub key as an alternative quote source, and why
+every parse here fails soft.
+
+**Send a desktop user agent.** Verified 2026-08-26:
+
+- no user agent returns HTTP 429
+- a **mobile** user agent (anything advertising Android or Mobile) returns
+  **HTTP 200 with the body "Too Many Requests"**
+
+That second one is the trap. A success status carrying no JSON means every parse
+silently yields nothing, so the stock side looks empty rather than broken and no
+error is logged anywhere. `YahooApi.looksLikeJson` rejects a non-JSON 200 for
+exactly this reason, and the user agent is a desktop string on purpose.
+
+Splits arrive as `{"date":...,"numerator":4.0,"denominator":1.0}` keyed by
+timestamp, in the same response as the bars, so a chart and a share count can
+never disagree about which splits are known. Nulls in the `close` array are
+non-trading gaps, not zeros; charting them as zero would draw a cliff to the axis
+on every market holiday.
+
+Search returns the exchange, which matters: `ASML` on NASDAQ and `ASML.AS` in
+Amsterdam are different instruments at different prices in different currencies.
+
+**There is no free realtime equity feed and there will not be.** Exchanges
+license that data. Everything free is delayed or end of day, so the stock source
+is a poller, quotes carry `stale` when the market is shut, and polling backs off
+to fifteen minutes while every held market is closed.
+
 ### Koios, for Cardano staking
 
 `api.koios.rest`, public tier keyless at 5000 requests a day. A sync is one
@@ -228,6 +263,12 @@ and `stakingQuantity` falls out of the fold rather than needing its own bookkeep
 **Room migrations are explicit and never destructive.** Unlike a cache of
 something a server owns, a transaction typed in by hand has no other copy.
 `fallbackToDestructiveMigration` would destroy the only one.
+
+**Splits are replayed, never written into the ledger.** `corporate_actions`
+holds the events and `PositionCalculator` applies them while walking the
+timeline. A split multiplies quantity and divides unit cost, so total basis is
+invariant. Ignoring them makes a position look like it lost three quarters of its
+value overnight; rewriting the ledger for them destroys what the user typed.
 
 **Staking is a balance, not ledger rows.** `staking_balances` holds one live
 figure per stake address, replaced on each sync. Rewards accrue continuously and
@@ -405,12 +446,39 @@ cut that to roughly 1.1 MB. Re-run on a machine with `cwebp` installed.
    A failed sync keeps the last known figure and stores the reason, so the UI can
    say when it was last checked instead of showing a stale number as current.
 
-5. **Next.** Stocks, and a combined dashboard. New `AssetClass.STOCK` plus new
-   `PriceSource` and `HistorySource` implementations. The core tables do not
-   change. Open question deferred to then: which equity data provider, since free
-   realtime equity data is materially harder to source than crypto.
+5. **Done. Stocks, and the combined view.** `AssetClass.STOCK` with Yahoo as the
+   keyless default and an optional Finnhub key. The core tables did not change,
+   which was the point of prefixing asset ids by class: shares slot into the same
+   ledger, the same price pipeline, the same custody table and the same backup.
 
-**Present a short plan before starting 5.** Milestones get agreed before
+   **Splits are replayed, never written back.** A 4:1 split multiplies the share
+   count and divides the unit cost, leaving total basis untouched. They are
+   interleaved with transactions chronologically rather than applied at the end,
+   because a sale entered before a split is denominated in pre-split shares and
+   applying the ratio afterwards would leave the wrong number on both sides.
+   Rewriting the ledger instead would destroy what the user typed and would be
+   unrecoverable if the provider later corrected the ratio.
+
+   **Dividends are the stock-side twin of staking rewards.** Both are earned
+   rather than bought, so `Holding.incomeValue` adds them into one figure and the
+   combined view presents "earned" once instead of making the user hold two ideas.
+   A dividend carries `cashAmount` and moves neither quantity nor basis, which is
+   why it needed its own accumulator rather than being squeezed into an existing
+   one.
+
+   Class routing runs through the price pipeline: a crypto exchange has never
+   heard of AAPL and Yahoo has no opinion on the long tail of tokens, so each
+   class goes to its own ladder. `PortfolioScope` filters the portfolio to All,
+   Crypto or Stocks, and per-class snapshots make each chartable. The parts are
+   derived from the same holdings as the whole, so a per-class total and the
+   grand total can never disagree.
+
+6. **Parked.** Dividend reinvestment (DRIP), where a dividend buys shares rather
+   than paying cash. It needs per-position reinvestment settings and
+   reconciliation against what the broker actually did, and the ledger already
+   represents it as a DIVIDEND plus a BUY for anyone who wants it today.
+
+**Present a short plan before starting 6.** Milestones get agreed before
 they get built, not after.
 
 ## Verified in the sandbox, 2026-08-25

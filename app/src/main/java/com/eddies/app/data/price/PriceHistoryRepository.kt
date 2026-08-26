@@ -6,6 +6,8 @@ import com.eddies.app.data.db.entity.CandleInterval
 import com.eddies.app.data.db.entity.PriceCandleEntity
 import com.eddies.app.data.prefs.RealtimeFeed
 import com.eddies.app.data.prefs.SettingsDataStore
+import com.eddies.app.domain.AssetClass
+import com.eddies.app.domain.AssetIds
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -33,6 +35,7 @@ class PriceHistoryRepository @Inject constructor(
     private val kraken: KrakenHistorySource,
     private val binance: BinanceHistorySource,
     private val aggregator: AggregatorHistorySource,
+    private val stocks: com.eddies.app.data.stocks.StockHistorySource,
     private val fx: FxRepository,
 ) {
     /**
@@ -79,7 +82,10 @@ class PriceHistoryRepository @Inject constructor(
         val cfg = settings.current()
         val ticker = asset.symbol
 
-        val ordered = when (cfg.realtimeFeed) {
+        // A share has exactly one source; a coin has a ladder of three.
+        val ordered = if (AssetIds.classOf(assetId) == AssetClass.STOCK) {
+            listOf(stocks)
+        } else when (cfg.realtimeFeed) {
             RealtimeFeed.BINANCE -> listOf(binance, kraken, aggregator)
             RealtimeFeed.KRAKEN, RealtimeFeed.OFF -> listOf(kraken, binance, aggregator)
         }

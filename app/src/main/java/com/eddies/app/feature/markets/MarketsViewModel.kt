@@ -22,8 +22,12 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import javax.inject.Inject
 
+/** Which universe the search box is pointed at. */
+enum class SearchScope(val label: String) { COINS("Coins"), STOCKS("Stocks") }
+
 data class MarketsUiState(
     val query: String = "",
+    val searchScope: SearchScope = SearchScope.COINS,
     val results: List<Asset> = emptyList(),
     val prices: Map<String, PriceTick> = emptyMap(),
     val currency: String = "EUR",
@@ -43,6 +47,7 @@ class MarketsViewModel @Inject constructor(
 
     private val query = MutableStateFlow("")
     private val searching = MutableStateFlow(false)
+    private val searchScope = MutableStateFlow(SearchScope.COINS)
 
     /**
      * Debounced so a search runs per pause, not per keystroke. That is a
@@ -52,10 +57,16 @@ class MarketsViewModel @Inject constructor(
     private val results = combine(
         query.debounce(220).distinctUntilChanged(),
         settings.settings.map { it.remoteIcons }.distinctUntilChanged(),
-    ) { q, allowRemote -> q to allowRemote }
-        .mapLatest { (q, allowRemote) ->
+        searchScope,
+    ) { q, allowRemote, scope -> Triple(q, allowRemote, scope) }
+        .mapLatest { (q, allowRemote, scope) ->
             searching.value = true
-            val out = assets.search(q, allowRemote = allowRemote && q.length >= 2)
+            val out = when (scope) {
+                // Coins are searched offline first, so typing a coin name
+                // discloses nothing. Shares have no offline set to search.
+                SearchScope.COINS -> assets.search(q, allowRemote = allowRemote && q.length >= 2)
+                SearchScope.STOCKS -> assets.searchStocks(q)
+            }
             searching.value = false
             out
         }
@@ -65,10 +76,11 @@ class MarketsViewModel @Inject constructor(
         results,
         prices.prices,
         settings.settings,
-        searching,
-    ) { q, list, priceMap, cfg, isSearching ->
+        combine(searching, searchScope) { s, scope -> s to scope },
+    ) { q, list, priceMap, cfg, (isSearching, scope) ->
         MarketsUiState(
             query = q,
+            searchScope = scope,
             results = list,
             prices = priceMap,
             currency = cfg.baseCurrency,
@@ -79,4 +91,6 @@ class MarketsViewModel @Inject constructor(
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), MarketsUiState())
 
     fun setQuery(q: String) { query.value = q }
+
+    fun setSearchScope(scope: SearchScope) { searchScope.value = scope }
 }

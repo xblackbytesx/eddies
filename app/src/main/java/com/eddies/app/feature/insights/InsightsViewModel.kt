@@ -6,6 +6,7 @@ import com.eddies.app.core.ui.IconResolver
 import com.eddies.app.data.prefs.SettingsDataStore
 import com.eddies.app.data.repo.CustodyRepository
 import com.eddies.app.data.repo.PortfolioRepository
+import com.eddies.app.domain.ClassTotals
 import com.eddies.app.domain.CustodyGroup
 import com.eddies.app.domain.CustodyGrouper
 import com.eddies.app.domain.Holding
@@ -22,6 +23,7 @@ data class InsightsUiState(
     val allocation: List<Pair<Holding, Double>> = emptyList(),
     val movers: List<Holding> = emptyList(),
     val custodyGroups: List<CustodyGroup> = emptyList(),
+    val perClass: List<ClassTotals> = emptyList(),
     val advanced: Boolean = false,
     val hidden: Boolean = false,
 )
@@ -47,6 +49,9 @@ class InsightsViewModel @Inject constructor(
             movers = summary.holdings
                 .filter { it.price?.changePct24h != null }
                 .sortedByDescending { it.price?.changePct24h ?: 0.0 },
+            // Biggest class first, so the combined view leads with whatever
+            // actually dominates rather than a fixed order.
+            perClass = summary.perClass().values.sortedByDescending { it.value },
             custodyGroups = CustodyGrouper.group(
                 holdings = summary.holdings.filter { it.position.quantity.signum() > 0 },
                 custodyByAsset = custodyByAsset.mapValues { (_, row) -> row.type to row.label },

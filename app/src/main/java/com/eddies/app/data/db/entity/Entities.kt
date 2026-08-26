@@ -98,6 +98,8 @@ data class TransactionEntity(
     val note: String? = null,
     val source: TxSource = TxSource.MANUAL,
     val externalId: String? = null,
+    /** Cash received, for DIVIDEND rows. TEXT holding a BigDecimal, like every amount here. */
+    val cashAmount: String? = null,
 )
 
 /**
@@ -160,15 +162,21 @@ data class FxRateEntity(
 )
 
 /**
- * One row per day of total portfolio value.
+ * One row per day per asset class.
  *
- * The portfolio value chart cannot be drawn from the ledger alone: it needs a
- * historical price for every held asset back to the first purchase. Snapshotting
- * forward is cheap, exact, and keeps working when a price API goes away.
+ * The value chart cannot be drawn from the ledger alone: it needs a historical
+ * price for every held asset back to the first purchase. Snapshotting forward is
+ * cheap, exact, and keeps working when a price API goes away.
+ *
+ * Keyed by class as well as day so crypto, stocks and the combined total are all
+ * chartable from one table. Storing only a combined figure would make the
+ * per-class views impossible to draw retrospectively, and storing a separate
+ * "ALL" row would let the parts drift out of step with the whole.
  */
-@Entity(tableName = "portfolio_snapshots")
+@Entity(tableName = "portfolio_snapshots", primaryKeys = ["day", "assetClass"])
 data class PortfolioSnapshotEntity(
-    @PrimaryKey val day: String,
+    val day: String,
+    val assetClass: AssetClass,
     val totalValue: String,
     val costBasis: String,
     val currency: String,
@@ -243,4 +251,24 @@ data class StakingBalanceEntity(
     val poolId: String? = null,
     val syncedAt: Long = System.currentTimeMillis(),
     val error: String? = null,
+)
+
+/**
+ * A share split as the exchange applied it, fetched from the price provider.
+ *
+ * Stored as an event and replayed when folding, never written back into the
+ * ledger. Rewriting quantities would destroy what the user actually typed and
+ * would be unrecoverable if the provider later corrected the ratio.
+ */
+@Entity(
+    tableName = "corporate_actions",
+    primaryKeys = ["assetId", "timestamp"],
+    indices = [Index("assetId")],
+)
+data class SplitEventEntity(
+    val assetId: String,
+    val timestamp: Long,
+    val numerator: String,
+    val denominator: String,
+    val fetchedAt: Long = System.currentTimeMillis(),
 )

@@ -26,6 +26,8 @@ data class PositionSnapshot(
     val realizedPnl: BigDecimal,
     val stakingQuantity: BigDecimal,
     val stakingCostBasis: BigDecimal,
+    /** Cash dividends received, in the base currency. Earned, not bought. */
+    val dividendIncome: BigDecimal = BigDecimal.ZERO,
     val lots: List<Lot>,
     /** Rows the fold could not apply, for example a sell with nothing held. */
     val warnings: List<String>,
@@ -74,16 +76,45 @@ object PositionCalculator {
         fx: FxTable = IdentityFx,
         includeFeesInBasis: Boolean = true,
         assetId: String = txs.firstOrNull()?.assetId ?: "",
+        splits: List<SplitEvent> = emptyList(),
     ): PositionSnapshot {
         val lots = ArrayList<Lot>()
         var realized = BigDecimal.ZERO
         var stakingQty = BigDecimal.ZERO
         var stakingBasis = BigDecimal.ZERO
+        var dividends = BigDecimal.ZERO
         val warnings = ArrayList<String>()
 
+        // Splits are interleaved with transactions rather than applied at the
+        // end. A sale entered before a split is denominated in pre-split shares,
+        // so replaying in order is the only way both sides come out right.
+        val pendingSplits = splits.filter { it.ratio.signum() > 0 }.sortedBy { it.timestamp }
+        var splitIndex = 0
+
+        fun applySplitsUpTo(timestamp: Long) {
+            while (splitIndex < pendingSplits.size && pendingSplits[splitIndex].timestamp <= timestamp) {
+                val ratio = pendingSplits[splitIndex].ratio
+                for (i in lots.indices) {
+                    val lot = lots[i]
+                    lots[i] = lot.copy(
+                        quantity = lot.quantity * ratio,
+                        // Total basis is invariant across a split: more shares,
+                        // proportionally cheaper each.
+                        unitCost = lot.unitCost.divide(ratio, MC),
+                    )
+                }
+                stakingQty *= ratio
+                splitIndex++
+            }
+        }
+
         for (tx in txs.sortedBy { it.timestamp }) {
+            applySplitsUpTo(tx.timestamp)
             val qty = tx.quantity.abs()
-            if (qty.signum() == 0 && tx.type != TxType.FEE) {
+            // A dividend is cash with no share movement, and a fee can be
+            // recorded without one, so neither is a malformed row. Everything
+            // else with no quantity is.
+            if (qty.signum() == 0 && tx.type != TxType.FEE && tx.type != TxType.DIVIDEND) {
                 warnings += "Ignored a zero-quantity ${tx.type} row."
                 continue
             }
@@ -120,6 +151,15 @@ object PositionCalculator {
                     stakingBasis = (stakingBasis - consumed.stakingBasis).max(BigDecimal.ZERO)
                 }
 
+                TxType.DIVIDEND -> {
+                    // Cash out, no shares in. It moves neither quantity nor
+                    // basis, which is exactly why it needs its own accumulator
+                    // rather than being squeezed into one of them.
+                    val cash = tx.cashAmount ?: BigDecimal.ZERO
+                    dividends += convert(cash, tx.quoteCurrency, baseCurrency, tx.timestamp, fx)
+                        ?: BigDecimal.ZERO
+                }
+
                 TxType.TRANSFER_OUT, TxType.FEE -> {
                     // Leaving your custody is not a disposal, so it moves no
                     // realized P/L. It does reduce the holding and its basis,
@@ -137,6 +177,10 @@ object PositionCalculator {
             }
         }
 
+        // Splits after the final transaction still count: someone who bought
+        // once in 2019 and has not traded since still holds the post-split count.
+        applySplitsUpTo(Long.MAX_VALUE)
+
         val remaining = lots.filter { it.quantity.signum() > 0 }
         return PositionSnapshot(
             assetId = assetId,
@@ -145,6 +189,7 @@ object PositionCalculator {
             realizedPnl = realized,
             stakingQuantity = stakingQty,
             stakingCostBasis = stakingBasis,
+            dividendIncome = dividends,
             lots = remaining,
             warnings = warnings,
         )

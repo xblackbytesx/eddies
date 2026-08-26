@@ -99,9 +99,22 @@ val UserSelectableTxTypes = listOf(
     TxType.SELL,
     TxType.TRANSFER_IN,
     TxType.TRANSFER_OUT,
+    TxType.DIVIDEND,
     TxType.STAKING_REWARD,
     TxType.AIRDROP,
 )
+
+/**
+ * The types worth offering for an asset class.
+ *
+ * Staking on a share and dividends on a coin are both nonsense, and a form that
+ * offers them invites a row that can never be right.
+ */
+fun txTypesFor(assetClass: com.eddies.app.domain.AssetClass): List<TxType> = when (assetClass) {
+    com.eddies.app.domain.AssetClass.STOCK -> UserSelectableTxTypes - TxType.STAKING_REWARD
+    com.eddies.app.domain.AssetClass.CRYPTO -> UserSelectableTxTypes - TxType.DIVIDEND
+    com.eddies.app.domain.AssetClass.CASH -> listOf(TxType.TRANSFER_IN, TxType.TRANSFER_OUT)
+}
 
 val TxType.label: String
     get() = when (this) {
@@ -112,6 +125,7 @@ val TxType.label: String
         TxType.STAKING_REWARD -> "Staking reward"
         TxType.AIRDROP -> "Airdrop"
         TxType.FEE -> "Fee"
+        TxType.DIVIDEND -> "Dividend"
     }
 
 val TxSource.label: String

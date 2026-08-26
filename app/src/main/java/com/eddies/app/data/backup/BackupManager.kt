@@ -40,6 +40,7 @@ class BackupManager @Inject constructor(
     private val assetDao: AssetDao,
     private val settings: SettingsDataStore,
     private val custodyDao: CustodyDao,
+    private val corporateActionDao: com.eddies.app.data.db.dao.CorporateActionDao,
     private val json: Json,
 ) {
 
@@ -60,6 +61,9 @@ class BackupManager @Inject constructor(
             assets = assets.map { it.toBackup() },
             transactions = txs.map { it.toBackup() },
             custody = if (options.portfolio) custodyDao.all().map { it.toBackup() } else emptyList(),
+            splits = if (options.portfolio) corporateActionDao.all().map {
+                BackupSplit(it.assetId, it.timestamp, it.numerator, it.denominator)
+            } else emptyList(),
         )
         BackupCrypto.encrypt(json.encodeToString(payload).toByteArray(), passphrase)
     }
@@ -118,6 +122,21 @@ class BackupManager @Inject constructor(
         // Restored after the assets exist, since it keys on them.
         payload.custody.forEach { entry ->
             runCatching { custodyDao.upsert(entry.toEntity()) }
+        }
+
+        if (payload.splits.isNotEmpty()) {
+            runCatching {
+                corporateActionDao.upsert(
+                    payload.splits.map {
+                        com.eddies.app.data.db.entity.SplitEventEntity(
+                            assetId = it.assetId,
+                            timestamp = it.timestamp,
+                            numerator = it.numerator,
+                            denominator = it.denominator,
+                        )
+                    },
+                )
+            }
         }
 
         payload.settings?.let { applySettings(it) }
@@ -207,6 +226,7 @@ private fun Transaction.toBackup() = BackupTransaction(
     note = note,
     source = source.name,
     externalId = externalId,
+    cashAmount = cashAmount?.toPlainString(),
 )
 
 private fun BackupTransaction.toDomain(accountId: Long) = Transaction(
@@ -223,6 +243,7 @@ private fun BackupTransaction.toDomain(accountId: Long) = Transaction(
     note = note,
     source = runCatching { TxSource.valueOf(source) }.getOrDefault(TxSource.MANUAL),
     externalId = externalId,
+    cashAmount = cashAmount?.let { runCatching { BigDecimal(it) }.getOrNull() },
 )
 
 private fun AssetCustodyEntity.toBackup() = BackupCustody(

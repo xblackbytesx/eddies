@@ -55,6 +55,7 @@ data class AppSettings(
     val aggregator: Aggregator = Aggregator.COINPAPRIKA,
     val pollIntervalSeconds: Int = 60,
     val hasCoinGeckoKey: Boolean = false,
+    val hasStockApiKey: Boolean = false,
     val remoteIcons: Boolean = false,
     // Portfolio
     val costBasisMethod: CostBasisMethod = CostBasisMethod.AVERAGE,
@@ -94,6 +95,7 @@ class SettingsDataStore @Inject constructor(
         val aggregator = stringPreferencesKey("aggregator")
         val pollIntervalSeconds = intPreferencesKey("poll_interval_seconds")
         val coinGeckoKeyCipher = stringPreferencesKey("coingecko_key_cipher")
+        val stockApiKeyCipher = stringPreferencesKey("stock_api_key_cipher")
         val remoteIcons = booleanPreferencesKey("remote_icons")
         val costBasisMethod = stringPreferencesKey("cost_basis_method")
         val includeFeesInBasis = booleanPreferencesKey("include_fees_in_basis")
@@ -120,6 +122,7 @@ class SettingsDataStore @Inject constructor(
             aggregator = p[Keys.aggregator].toEnum(Aggregator.COINPAPRIKA),
             pollIntervalSeconds = p[Keys.pollIntervalSeconds] ?: 60,
             hasCoinGeckoKey = !p[Keys.coinGeckoKeyCipher].isNullOrEmpty(),
+            hasStockApiKey = !p[Keys.stockApiKeyCipher].isNullOrEmpty(),
             remoteIcons = p[Keys.remoteIcons] ?: false,
             costBasisMethod = p[Keys.costBasisMethod].toEnum(CostBasisMethod.AVERAGE),
             includeFeesInBasis = p[Keys.includeFeesInBasis] ?: true,
@@ -174,6 +177,21 @@ class SettingsDataStore @Inject constructor(
                 it[Keys.coinGeckoKeyCipher] =
                     Base64.encodeToString(secrets.encrypt(key), Base64.NO_WRAP)
             }
+        }
+    }
+
+    /** The user's own stock API key, sealed at rest. Never logged, never in a URL we print. */
+    suspend fun stockApiKey(): String {
+        val cipher = context.dataStore.data.first()[Keys.stockApiKeyCipher] ?: return ""
+        if (cipher.isEmpty()) return ""
+        return runCatching { secrets.decrypt(Base64.decode(cipher, Base64.NO_WRAP)) }.getOrDefault("")
+    }
+
+    suspend fun setStockApiKey(key: String) {
+        context.dataStore.edit {
+            if (key.isBlank()) it.remove(Keys.stockApiKeyCipher)
+            else it[Keys.stockApiKeyCipher] =
+                Base64.encodeToString(secrets.encrypt(key), Base64.NO_WRAP)
         }
     }
 

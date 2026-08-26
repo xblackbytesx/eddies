@@ -1,7 +1,7 @@
 package com.eddies.app.domain
 
 /** Every market-data source the app can name a symbol in. */
-enum class PriceSourceId { KRAKEN, BINANCE, COINPAPRIKA, COINGECKO, KOIOS, MANUAL }
+enum class PriceSourceId { KRAKEN, BINANCE, COINPAPRIKA, COINGECKO, KOIOS, YAHOO, STOCK_API, MANUAL }
 
 /**
  * An asset as the app knows it, independent of what any source calls it.

@@ -49,6 +49,15 @@ data class Holding(
         price?.let { (position.stakingQuantity + stakingPending) * it.price } ?: BigDecimal.ZERO
 
     val stakingQuantityTotal: BigDecimal = position.stakingQuantity + stakingPending
+
+    /**
+     * Everything earned rather than bought, in fiat.
+     *
+     * Staking rewards are a quantity of the coin, dividends are cash, but both
+     * answer the same question, so the combined view adds them into one figure
+     * rather than making the user hold two ideas at once.
+     */
+    val incomeValue: BigDecimal = stakingValue + position.dividendIncome
     val hasPendingStaking: Boolean = stakingPending.signum() > 0
     val hasPrice: Boolean = price != null
     val isStale: Boolean = price?.stale ?: true
@@ -80,6 +89,30 @@ data class PortfolioSummary(
         if (totalValue.signum() == 0) return holdings.map { it to 0.0 }
         return holdings.map { it to it.marketValue.divide(totalValue, MC).toDouble() }
     }
+
+    /**
+     * Value, cost and income per asset class.
+     *
+     * The basis for both the class filter and the combined view: the parts are
+     * derived from the same holdings as the whole, so a per-class total and the
+     * grand total can never disagree.
+     */
+    fun perClass(): Map<AssetClass, ClassTotals> =
+        holdings.groupBy { AssetIds.classOf(it.asset.id) ?: AssetClass.CRYPTO }
+            .mapValues { (assetClass, list) ->
+                ClassTotals(
+                    assetClass = assetClass,
+                    value = list.sumOf { it.marketValue },
+                    costBasis = list.sumOf { it.position.costBasis },
+                    unrealizedPnl = list.sumOf { it.unrealizedPnl },
+                    realizedPnl = list.sumOf { it.position.realizedPnl },
+                    income = list.sumOf { it.incomeValue },
+                    holdings = list.size,
+                )
+            }
+
+    /** True once more than one class is held, which is when the combined view earns its place. */
+    val isMixed: Boolean get() = perClass().size > 1
 
     companion object {
         fun empty(currency: String) = PortfolioSummary(
@@ -114,6 +147,7 @@ object PortfolioBuilder {
         includeFeesInBasis: Boolean = true,
         /** Outstanding staking rewards per asset, read from the chain. */
         stakingPending: Map<String, BigDecimal> = emptyMap(),
+        splitsByAsset: Map<String, List<SplitEvent>> = emptyMap(),
     ): PortfolioSummary {
         // A coin can be staked without any recorded transaction, so the asset set
         // is the union. Keying only off the ledger would hide a holding that
@@ -129,6 +163,7 @@ object PortfolioBuilder {
                 fx = fx,
                 includeFeesInBasis = includeFeesInBasis,
                 assetId = assetId,
+                splits = splitsByAsset[assetId].orEmpty(),
             )
             val price = prices[assetId]?.let { tick ->
                 if (tick.currency == currency) tick
@@ -158,4 +193,41 @@ object PortfolioBuilder {
             anyStale = holdings.any { it.hasPrice && it.isStale },
         )
     }
+}
+
+/** One asset class, totalled. */
+data class ClassTotals(
+    val assetClass: AssetClass,
+    val value: BigDecimal,
+    val costBasis: BigDecimal,
+    val unrealizedPnl: BigDecimal,
+    val realizedPnl: BigDecimal,
+    /** Staking rewards and dividends together: everything earned rather than bought. */
+    val income: BigDecimal,
+    val holdings: Int,
+) {
+    val pnlPct: Double?
+        get() = if (costBasis.signum() == 0) null
+        else unrealizedPnl.divide(costBasis, MC).toDouble() * 100.0
+}
+
+/** Which slice of the portfolio a screen is showing. */
+enum class PortfolioScope(val label: String) {
+    ALL("Everything"),
+    CRYPTO("Crypto"),
+    STOCKS("Stocks"),
+    ;
+
+    fun matches(assetId: String): Boolean = when (this) {
+        ALL -> true
+        CRYPTO -> AssetIds.classOf(assetId) == AssetClass.CRYPTO
+        STOCKS -> AssetIds.classOf(assetId) == AssetClass.STOCK
+    }
+
+    val assetClass: AssetClass?
+        get() = when (this) {
+            ALL -> null
+            CRYPTO -> AssetClass.CRYPTO
+            STOCKS -> AssetClass.STOCK
+        }
 }

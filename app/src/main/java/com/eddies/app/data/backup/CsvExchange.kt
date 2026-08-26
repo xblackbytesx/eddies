@@ -22,7 +22,7 @@ object CsvExchange {
 
     private val HEADER = listOf(
         "timestamp", "date", "type", "asset_id", "symbol",
-        "quantity", "price_per_unit", "currency", "fee", "fee_currency", "note",
+        "quantity", "price_per_unit", "currency", "fee", "fee_currency", "cash_amount", "note",
     )
 
     private val DATE_FORMAT: DateTimeFormatter =
@@ -43,6 +43,7 @@ object CsvExchange {
                 tx.quoteCurrency,
                 tx.feeQuantity?.toPlainString().orEmpty(),
                 tx.feeAssetId.orEmpty(),
+                tx.cashAmount?.toPlainString().orEmpty(),
                 tx.note.orEmpty(),
             )
             sb.append(row.joinToString(",") { escape(it) }).append('\n')
@@ -84,21 +85,29 @@ object CsvExchange {
 
             val quantity = cell("quantity")?.toDecimal()
             val assetId = cell("asset_id")
-            if (quantity == null || quantity.signum() <= 0 || assetId == null) {
+            val cash = cell("cash_amount")?.toDecimal()
+            val type = cell("type")?.let { runCatching { TxType.valueOf(it.uppercase()) }.getOrNull() }
+                ?: TxType.BUY
+            // A dividend is cash with no share movement, so requiring a quantity
+            // would silently drop every dividend row on import.
+            val needsQuantity = type != TxType.DIVIDEND
+            val quantityOk = if (needsQuantity) quantity != null && quantity.signum() > 0
+            else cash != null && cash.signum() > 0
+            if (!quantityOk || assetId == null) {
                 skipped++
-                if (errors.size < 5) errors += "Row ${n + 2}: missing a quantity or an asset id."
+                if (errors.size < 5) errors += "Row ${n + 2}: missing an amount or an asset id."
                 continue
             }
             out += Transaction(
                 accountId = 0,
                 assetId = assetId,
-                type = cell("type")?.let { runCatching { TxType.valueOf(it.uppercase()) }.getOrNull() }
-                    ?: TxType.BUY,
-                quantity = quantity,
+                type = type,
+                quantity = quantity ?: BigDecimal.ZERO,
                 pricePerUnit = cell("price_per_unit")?.toDecimal(),
                 quoteCurrency = cell("currency")?.uppercase() ?: defaultCurrency,
                 feeQuantity = cell("fee")?.toDecimal(),
                 feeAssetId = cell("fee_currency")?.uppercase(),
+                cashAmount = cell("cash_amount")?.toDecimal(),
                 timestamp = cell("timestamp")?.toLongOrNull()
                     ?: cell("date")?.let { parseDate(it) }
                     ?: System.currentTimeMillis(),

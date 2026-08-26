@@ -9,6 +9,8 @@ import com.eddies.app.data.prefs.SettingsDataStore
 import com.eddies.app.data.price.PriceRepository
 import com.eddies.app.data.repo.AssetRepository
 import com.eddies.app.data.repo.TransactionRepository
+import com.eddies.app.data.repo.UserSelectableTxTypes
+import com.eddies.app.data.repo.txTypesFor
 import com.eddies.app.domain.Asset
 import com.eddies.app.domain.MC
 import com.eddies.app.domain.Transaction
@@ -37,6 +39,7 @@ data class AddTxUiState(
     val priceInput: String = "",
     val feeInput: String = "",
     val note: String = "",
+    val cashInput: String = "",
     val timestamp: Long = System.currentTimeMillis(),
     val currency: String = "EUR",
     val marketPrice: BigDecimal? = null,
@@ -75,8 +78,19 @@ data class AddTxUiState(
             }
         }
 
+    /** A dividend is cash with no shares, so it is the one type with no quantity. */
+    val isCashOnly: Boolean get() = type == TxType.DIVIDEND
+
+    /** The types that make sense for this asset. Staking on a share is nonsense. */
+    val availableTypes: List<TxType>
+        get() = asset?.let { txTypesFor(it.assetClass) } ?: UserSelectableTxTypes
+
     val canSave: Boolean
-        get() = asset != null && (effectiveQuantity?.signum() ?: 0) > 0 && !saving
+        get() = when {
+            asset == null || saving -> false
+            isCashOnly -> (cashInput.toDecimalOrNull()?.signum() ?: 0) > 0
+            else -> (effectiveQuantity?.signum() ?: 0) > 0
+        }
 }
 
 @HiltViewModel
@@ -116,6 +130,7 @@ class AddTransactionViewModel @Inject constructor(
                 iconUri = icons.uriFor(asset?.iconSlug),
                 type = tx.type,
                 quantityInput = tx.quantity.stripTrailingZeros().toPlainString(),
+                cashInput = tx.cashAmount?.stripTrailingZeros()?.toPlainString().orEmpty(),
                 priceInput = tx.pricePerUnit?.stripTrailingZeros()?.toPlainString().orEmpty(),
                 feeInput = tx.feeQuantity?.stripTrailingZeros()?.toPlainString().orEmpty(),
                 note = tx.note.orEmpty(),
@@ -157,6 +172,7 @@ class AddTransactionViewModel @Inject constructor(
     fun setPrice(v: String) = _state.update { it.copy(priceInput = v.sanitiseDecimal()) }
     fun setFee(v: String) = _state.update { it.copy(feeInput = v.sanitiseDecimal()) }
     fun setNote(v: String) = _state.update { it.copy(note = v) }
+    fun setCash(v: String) = _state.update { it.copy(cashInput = v.sanitiseDecimal()) }
     fun setTimestamp(ts: Long) = _state.update { it.copy(timestamp = ts) }
 
     fun useMarketPrice() {
@@ -168,8 +184,8 @@ class AddTransactionViewModel @Inject constructor(
     fun save() {
         val s = _state.value
         val asset = s.asset ?: return
-        val qty = s.effectiveQuantity ?: return
-        if (qty.signum() <= 0) return
+        val qty = s.effectiveQuantity ?: java.math.BigDecimal.ZERO
+        if (!s.canSave) return
 
         _state.update { it.copy(saving = true, error = null) }
         viewModelScope.launch {
@@ -181,7 +197,8 @@ class AddTransactionViewModel @Inject constructor(
                         accountId = accountId,
                         assetId = asset.id,
                         type = s.type,
-                        quantity = qty,
+                        quantity = if (s.isCashOnly) java.math.BigDecimal.ZERO else qty,
+                        cashAmount = s.cashInput.toDecimalOrNull().takeIf { s.isCashOnly },
                         // A transfer has no price by nature; forcing one in would
                         // invent a cost basis the user never stated.
                         pricePerUnit = s.effectivePrice.takeIf { s.type.carriesPrice },
