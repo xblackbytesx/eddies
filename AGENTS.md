@@ -22,6 +22,11 @@ make release # release APKs (signed if keystore.properties/env present)
 make shell   # container shell for one-off gradle tasks
 ```
 
+After changing a migration, also run `scripts/verify-migrations.sh`. Migration
+SQL is a string: the compiler cannot check it and the JVM suite cannot execute
+it, so it is the one part of this app that ships unverified unless you run that.
+```
+
 Definition of done: `make test` passes, and for anything touching UI or the
 build, `make build` produces an APK. **Check the timestamp it prints.** Never
 infer a successful build from a successful `make test`.
@@ -263,6 +268,18 @@ and `stakingQuantity` falls out of the fold rather than needing its own bookkeep
 **Room migrations are explicit and never destructive.** Unlike a cache of
 something a server owns, a transaction typed in by hand has no other copy.
 `fallbackToDestructiveMigration` would destroy the only one.
+
+**Migration SQL is verified by executing it, not by reading it.**
+`scripts/verify-migrations.sh` extracts every `execSQL` string **from the source
+file**, replays the chain against real SQLite, seeds a row so `INSERT ... SELECT`
+is actually exercised, and diffs the result against a fresh database built from
+the exported schema. Run it after touching any migration.
+
+This exists because a previous check hand copied the statements into the test.
+It verified the intent and passed, while the shipped app crashed on launch with
+`no such column: CRYPTO`: a quote had been lost from `CRYPTO` in the source and
+the copy in the test still had it. A check that duplicates the thing it is
+checking is not a check.
 
 **Splits are replayed, never written into the ledger.** `corporate_actions`
 holds the events and `PositionCalculator` applies them while walking the
