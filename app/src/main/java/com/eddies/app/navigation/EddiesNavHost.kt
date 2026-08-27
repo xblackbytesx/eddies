@@ -37,6 +37,12 @@ import androidx.navigation.toRoute
 import com.eddies.app.feature.about.AboutScreen
 import com.eddies.app.feature.accounts.AccountsScreen
 import com.eddies.app.feature.merge.MergeDuplicatesScreen
+import com.eddies.app.feature.settings.CryptoSettingsScreen
+import com.eddies.app.feature.settings.DataSettingsScreen
+import com.eddies.app.feature.settings.GeneralSettingsScreen
+import com.eddies.app.feature.settings.PortfolioSettingsScreen
+import com.eddies.app.feature.settings.PrivacySettingsScreen
+import com.eddies.app.feature.settings.StockSettingsScreen
 import com.eddies.app.feature.addtransaction.AddTransactionScreen
 import com.eddies.app.feature.assetdetail.AssetDetailScreen
 import com.eddies.app.feature.backup.BackupScreen
@@ -88,6 +94,12 @@ fun EddiesNavHost(
         destination?.hasRoute(AboutRoute::class) == true -> "About"
         destination?.hasRoute(TransactionsRoute::class) == true -> "All transactions"
         destination?.hasRoute(MergeDuplicatesRoute::class) == true -> "Merge duplicates"
+        destination?.hasRoute(GeneralSettingsRoute::class) == true -> "General"
+        destination?.hasRoute(CryptoSettingsRoute::class) == true -> "Crypto"
+        destination?.hasRoute(StockSettingsRoute::class) == true -> "Stocks"
+        destination?.hasRoute(PortfolioSettingsRoute::class) == true -> "Portfolio"
+        destination?.hasRoute(PrivacySettingsRoute::class) == true -> "Privacy and security"
+        destination?.hasRoute(DataSettingsRoute::class) == true -> "Data management"
         else -> tabs.firstOrNull { destination?.hasRoute(it.routeClass) == true }?.label ?: "Eddies"
     }
 
@@ -161,10 +173,28 @@ fun EddiesNavHost(
                 }
                 composable<SettingsRoute> {
                     SettingsScreen(
-                        onOpenBackup = { navController.navigate(BackupRoute) },
-                        onOpenTransactions = { navController.navigate(TransactionsRoute) },
-                        onOpenAccounts = { navController.navigate(AccountsRoute) },
+                        onOpenGeneral = { navController.navigate(GeneralSettingsRoute) },
+                        onOpenCrypto = { navController.navigate(CryptoSettingsRoute) },
+                        onOpenStocks = { navController.navigate(StockSettingsRoute) },
+                        onOpenPortfolio = { navController.navigate(PortfolioSettingsRoute) },
+                        onOpenPrivacy = { navController.navigate(PrivacySettingsRoute) },
+                        onOpenData = { navController.navigate(DataSettingsRoute) },
                         onOpenAbout = { navController.navigate(AboutRoute) },
+                    )
+                }
+                composable<GeneralSettingsRoute> { GeneralSettingsScreen() }
+                composable<CryptoSettingsRoute> { CryptoSettingsScreen() }
+                composable<StockSettingsRoute> { StockSettingsScreen() }
+                composable<PortfolioSettingsRoute> {
+                    PortfolioSettingsScreen(
+                        onOpenAccounts = { navController.navigate(AccountsRoute) },
+                    )
+                }
+                composable<PrivacySettingsRoute> { PrivacySettingsScreen() }
+                composable<DataSettingsRoute> {
+                    DataSettingsScreen(
+                        onOpenTransactions = { navController.navigate(TransactionsRoute) },
+                        onOpenBackup = { navController.navigate(BackupRoute) },
                         onOpenMergeDuplicates = { navController.navigate(MergeDuplicatesRoute) },
                     )
                 }

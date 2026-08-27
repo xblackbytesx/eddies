@@ -355,7 +355,7 @@ app/src/main/java/com/eddies/app/
                AssetIdentity, MoneyFormat, Ledger      (all framework-free)
   di/          DatabaseModule, NetworkModule, WorkModule
   feature/     portfolio/ insights/ markets/ assetdetail/ addtransaction/
-               transactions/ accounts/ settings/ backup/ about/ lock/
+               transactions/ accounts/ settings/ backup/ about/ lock/ merge/
   navigation/  Routes, EddiesNavHost, RootViewModel
   work/        DailyWorker, WorkScheduler
 app/src/main/assets/  coins/*.png (389), asset_seed.json (600 coins)
@@ -383,6 +383,32 @@ verified on a device.
 - **Never install the Ktor `Logging` plugin.** The request URLs carry the exact
   list of coins the user holds, which is the one thing this app exists to keep
   private.
+
+## Settings is a hub, and every preference has exactly one home
+
+`SettingsScreen` is a list of seven categories, each its own route and screen:
+General, Portfolio, Crypto, Stocks, Privacy and security, Data management,
+About. It was one flat scroll of cards until shares arrived, at which point two
+feeds, two fallback sources and two API keys sat interleaved in a single "Market
+data" card with nothing saying which belonged to which.
+
+**Split by subject, not by control type.** A stock preference goes in Stocks
+even when Stocks holds one control, because the value of a hub is that there is
+exactly one place a thing can be. Grouping by widget kind (all the switches, all
+the choices) is the failure mode that produced the old screen.
+
+Shared plumbing lives in `SettingsRows.kt`: `SettingsPage` is the scroll and
+padding shell every category uses, and `ApiKeyEditor` is the one key form, since
+the CoinGecko and Finnhub copies had already started to drift apart in wording.
+
+**A preference that nothing reads is a bug, not a placeholder.** The
+reorganisation turned up two: `secondaryCurrency` was displayed under the
+portfolio total and restorable from a backup but had no control, so the only way
+to change it was restoring a backup that carried a different one. It has a
+control now. `autoLockSeconds` was stored, settable and read by nothing at all,
+with `RootViewModel` re-locking immediately on backgrounding by design; it has
+been removed rather than given a control that would do nothing. Exposing it
+would have been worse than leaving it hidden.
 
 ## Invariants
 

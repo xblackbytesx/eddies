@@ -5,7 +5,15 @@ import kotlinx.serialization.Serializable
 @Serializable data object PortfolioRoute
 @Serializable data object InsightsRoute
 @Serializable data object MarketsRoute
+/** The settings hub. Every category below is reached from it. */
 @Serializable data object SettingsRoute
+
+@Serializable data object GeneralSettingsRoute
+@Serializable data object CryptoSettingsRoute
+@Serializable data object StockSettingsRoute
+@Serializable data object PortfolioSettingsRoute
+@Serializable data object PrivacySettingsRoute
+@Serializable data object DataSettingsRoute
 
 @Serializable data class AssetDetailRoute(val assetId: String)
 @Serializable data class AddTransactionRoute(val assetId: String? = null, val transactionId: Long = 0)
