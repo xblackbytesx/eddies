@@ -3,44 +3,39 @@
 A portfolio tracker for Android that keeps your holdings on your phone. Crypto
 and stocks, together or separately.
 
-No account. No server of its own. No analytics, no crash reporting, no ads. The
-database is encrypted, the app declares one meaningful permission (internet), and
-the only thing it ever sends anywhere is which instruments to price.
+No account, no server of its own, no analytics. The database is encrypted, the
+app asks for one permission (internet), and the only thing it sends anywhere is
+which instruments to price.
 
 Named after Cyberpunk 2077's eurodollars, which turned out to fit: EUR and USD
 are the two currencies it ships with.
 
 ## What it does
 
-- **Live crypto prices.** A public WebSocket feed from Kraken or Binance, your
-  choice, with a REST aggregator covering coins no exchange lists. Kraken is the
-  default because it quotes EUR pairs directly, so no conversion is needed for
-  most holdings.
-- **Stocks, ETFs and funds**, including **Tradegate**, which most trackers skip.
-  Splits are applied correctly, so a position through a 4:1 split shows the right
-  share count and an unchanged cost basis. Dividends are tracked as income.
+- **Live crypto prices** over a public WebSocket from Kraken or Binance, your
+  choice, with a REST source covering coins no exchange lists.
+- **Stocks, ETFs and funds**, including Tradegate, which most trackers skip.
+  Splits are applied correctly and dividends are tracked as income.
 - **One portfolio, or two.** Filter to crypto, to stocks, or see them combined,
   each with its own chart and profit figures.
-- **Real cost basis.** Positions are derived from a transaction ledger rather
-  than a stored balance, so you get unrealised and realised profit, average cost,
-  and a correct answer after a partial sell. Average, FIFO, LIFO and HIFO.
+- **Real cost basis.** Positions come from a transaction ledger rather than a
+  stored balance, so realised and unrealised profit are both correct after a
+  partial sell. Average, FIFO, LIFO or HIFO.
 - **Staking.** Point it at a Cardano stake address and rewards still accruing on
   chain are added to your holding, shown separately from what you bought.
 - **Where things are kept.** Record that your BTC is on a hardware wallet and
   your ETF is at a broker, then see everything grouped by location.
-- **Charts that say something.** Value over time with a draggable crosshair,
-  allocation, movers. Drawn directly rather than by a chart library, so they
-  follow your theme.
-- **Simple by default.** Advanced trader mode adds cost basis, realised P/L,
-  market cap ranks and per-row detail once you want them.
-- **Encrypted backups.** A passphrase-protected file you write wherever you like.
-  Plain CSV export too, for a spreadsheet or a tax tool, clearly labelled as
-  unencrypted.
+- **Charts** with a draggable crosshair, allocation and movers, drawn directly
+  so they follow your theme.
+- **Simple by default.** Advanced mode adds cost basis, realised P/L and
+  per-row detail once you want them.
+- **Encrypted backups**, plus a plain CSV export for a spreadsheet or a tax
+  tool, clearly labelled as unencrypted.
 - **Dark by default**, with a true-black OLED mode.
 
 ## Installing
 
-Grab an APK from the [releases page](../../releases). There are several:
+Grab an APK from the [releases page](../../releases).
 
 | File | For |
 |---|---|
@@ -49,12 +44,9 @@ Grab an APK from the [releases page](../../releases). There are several:
 | `eddies-<version>-x86_64.apk` | Emulators. |
 | `eddies-<version>-universal.apk` | Works everywhere, roughly twice the size. |
 
-The per-architecture builds are about 15 MB against 30 MB for the universal one.
-Most of that is the SQLCipher native library that encrypts the database.
-
 ## Privacy
 
-The app talks to a handful of services, and only about prices:
+Eddies talks to a handful of services, and only about prices:
 
 - an exchange (Kraken or Binance) for live crypto prices
 - CoinPaprika, or CoinGecko with your own key, for coins no exchange lists
@@ -63,73 +55,43 @@ The app talks to a handful of services, and only about prices:
 - Koios, if you add a Cardano stake address
 - Frankfurter, for European Central Bank currency rates
 
-Those requests name the instruments being priced. That is unavoidable for a price, but
-it is why coin icons ship inside the app rather than being fetched, and why coin
-search is offline unless you turn remote lookup on.
+Those requests name the instruments being priced, which is unavoidable for a
+price. It is why coin icons ship inside the app rather than being fetched, and
+why coin search works offline unless you turn remote lookup on.
 
-Your ledger is stored in a SQLCipher-encrypted database whose key is held in the
-Android Keystore. System backups are disabled, because a restored backup would
-carry a database the new device has no key for. Portable backups are the
-passphrase-encrypted file you write yourself, which is deliberately independent
-of the Keystore so it opens on a new phone.
+Your ledger lives in a SQLCipher-encrypted database whose key is held in the
+Android Keystore. System backups are switched off, because a restored copy would
+carry a database the new phone has no key for. Portable backups are the
+passphrase-encrypted file you write yourself, deliberately independent of the
+Keystore so it opens anywhere.
 
 ## Building
 
-Everything runs in a container. There is no need for a local JDK or Android SDK.
+Everything runs in a container, so no local JDK or Android SDK is needed.
 
 ```
 make test      # unit tests, the fast gate
-make build     # debug APK  -> build-output/
-make demo      # demo APK with a fake portfolio, for screenshots
+make build     # debug APK -> build-output/
+make demo      # demo APK with a fabricated portfolio, for screenshots
 make lint
-make release   # release APKs, signed if you have a keystore configured
-make shell     # a shell in the build container
+make release   # release APKs, signed if a keystore is configured
 ```
 
-`make demo` produces a separate app (`com.eddies.app.demo`, "Eddies Demo") that
-installs alongside the real one and starts with a fabricated portfolio. It has
-its own applicationId and therefore its own database, so it cannot see your real
-holdings. Prices, charts and staking in it are live and real; only the
-transactions are invented.
+`make demo` produces a separate app that installs alongside the real one. It has
+its own applicationId and therefore its own database, so it cannot see your
+holdings.
 
-Every build prints the APKs it produced with timestamps, and flags anything left
-over from an earlier run as `STALE`. Check it rather than assuming.
+Tag `v*` and push to cut a release. GitHub Actions runs the tests, builds the
+APKs and attaches them.
 
-## Releasing
-
-Tag `v*` and push. GitHub Actions runs the tests as a gate, builds the release
-APKs, and attaches them to a GitHub release.
-
-Signing is optional. Set these repository secrets and the release is signed;
-leave them unset and it builds unsigned:
-
-| Secret | What |
-|---|---|
-| `RELEASE_KEYSTORE_BASE64` | Your keystore, base64 encoded |
-| `RELEASE_KEYSTORE_PASSWORD` | Store password |
-| `RELEASE_KEY_ALIAS` | Key alias |
-| `RELEASE_KEY_PASSWORD` | Key password |
-
-Locally, a git-ignored `keystore.properties` at the repo root does the same job:
-
-```properties
-storeFile=release.jks
-storePassword=...
-keyAlias=eddies
-keyPassword=...
-```
-
-## Coin icons
-
-`scripts/refresh-icons.sh` regenerates the bundled icon set and the offline coin
-list. It pulls from two sources, both permissively licensed so they can ship
-inside the APK: [ErikThiart/cryptocurrency-icons](https://github.com/ErikThiart/cryptocurrency-icons)
-(MIT) and [spothq/cryptocurrency-icons](https://github.com/spothq/cryptocurrency-icons)
-(CC0). Coins with no artwork in either get a generated monogram tile.
-
-Install `cwebp` before running it to cut the bundled icons from about 3.3 MB to
-1.1 MB.
+Contributors and agents: [AGENTS.md](AGENTS.md) has the architecture, the
+invariants and the things that look wrong until you know why.
 
 ## Licence
 
 GPLv3. See [LICENSE](LICENSE).
+
+Bundled coin icons come from
+[ErikThiart/cryptocurrency-icons](https://github.com/ErikThiart/cryptocurrency-icons)
+(MIT) and [spothq/cryptocurrency-icons](https://github.com/spothq/cryptocurrency-icons)
+(CC0).
