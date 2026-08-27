@@ -862,11 +862,24 @@ transitively, because the alpha requires it. Everything builds and all tests
 pass, but that is a beta Compose runtime under the whole app, which is the real
 reason this is a branch and not a commit on master.
 
-**No bottomBar any more.** The pill is an overlay inside the Scaffold content,
-aligned bottom-centre, applying `WindowInsets.navigationBars` itself since it
-sits outside any inset-aware slot. That works only because every tab screen
-already ends with 96.dp of bottom padding. A new tab screen that forgets it will
-have its last row sitting under the pill.
+**No bottomBar and no Scaffold FAB slot any more.** The pill and the add button
+share one Row, centred together as a unit, as an overlay inside the Scaffold
+content. It applies `WindowInsets.navigationBars` itself since it sits outside
+any inset-aware slot, and the button is sized to
+`FloatingToolbarDefaults.ContainerSize` so the two are one row of equal height
+rather than two stray objects. This works only because every tab screen already
+ends with 96.dp of bottom padding, which is now load-bearing: a new tab screen
+that forgets it will have its last row sitting under the pill.
+
+The button shows only on the portfolio tab, so the pill shifts sideways when you
+leave that tab. Keeping the pair centred was the explicit ask; reserving the
+space on every tab is the alternative if that movement grates.
+
+**The colours are deliberately not the Material defaults.** The stock checked
+`ToggleButton` fills with solid `primary`, and this app's primary is a bright
+cyan on a near-black background, so one glowing lozenge outshone the whole
+screen. The selected tab now gets a 16% cyan wash with cyan content, and the
+toolbar uses `standardFloatingToolbarColors` rather than the vibrant set.
 
 **Not verified here:** how it actually looks and feels, whether the pill crowds
 the FAB on the portfolio screen, and whether the label animation is pleasant or
