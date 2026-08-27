@@ -40,6 +40,23 @@ infer a successful build from a successful `make test`.
 `docker/run-gradle.sh` therefore ends by listing every APK in `build-output/` as
 `fresh` or `STALE`, and a mistyped goal exits non-zero.
 
+### Release signing
+
+Optional. With none of it configured the release builds unsigned rather than
+failing, which is deliberate: a fork should be able to build a release without
+inventing a keystore.
+
+CI reads four repository secrets: `RELEASE_KEYSTORE_BASE64` (the keystore,
+base64 encoded), `RELEASE_KEYSTORE_PASSWORD`, `RELEASE_KEY_ALIAS` and
+`RELEASE_KEY_PASSWORD`. Locally a git-ignored `keystore.properties` at the repo
+root does the same job with `storeFile`, `storePassword`, `keyAlias` and
+`keyPassword`.
+
+`keystore/debug.keystore` **is** committed, and that is fine: it is the standard
+Android debug key with the universally known `android` password. It is committed
+so every debug build signs identically and reinstalling never hits "signatures do
+not match".
+
 CI is **GitHub Actions**, not Gitea. This is the first project here on GitHub, so
 the workflows were ported rather than copied, and three differences are
 load-bearing: `actions/upload-artifact` must be `@v4` (v3 was shut down in
@@ -479,9 +496,9 @@ Yahoo symbol for history at the same time. That table has existed since v1 for
 exactly this and went unused until Tradegate needed it.
 
 This replaced the opposite rule, "a venue with its own prices is its own
-listing", which was defensible in the abstract and wrong in practice: the user
-added the same ETF through both the Tradegate tab and the stock search and got
-two holdings, one with one purchase and one with two, instead of one with three.
+listing", which was defensible in the abstract and wrong in practice. The same
+ETF reached through the Tradegate tab and through the stock search became two
+holdings: one with one purchase and one with two, instead of one with three.
 Nothing looked broken. The position, the cost basis and the allocation ring were
 simply all wrong. Prices at two venues do differ slightly; being off by a spread
 on one holding is worth far less than splitting a position in half.
@@ -500,12 +517,12 @@ with the same ISIN are always grouped, whatever their tickers say. Only where no
 ISIN is known does matching fall back to asset class plus ticker. Never on name:
 two share classes of one fund read almost identically.
 
-That guard is not theoretical. One fund family can list many funds (core,
-screened, factor-weighted and so on) that are entirely different products,
-and a ticker-only rule was one tap away from welding them into one position. The
-merge screen shows each entry's ISIN for the same reason: the suggestion has
-to be checkable, not merely trustworthy. The asset with
-the most transactions is kept, so the fewest rows move.
+That guard is not theoretical. A single fund family can list many funds that
+share a ticker on a broker statement while being entirely different products, so
+a ticker-only rule was one tap away from welding two real positions into one. The
+merge screen shows each entry's ISIN for the same reason: the suggestion has to
+be checkable, not merely trustworthy. Within a group, the asset with the most
+transactions is kept, so the fewest rows move.
 
 `scripts/verify-merge.sh` seeds the real duplicate into a real SQLite database
 built from the exported schema and replays the merge, with the SQL extracted from
@@ -797,7 +814,7 @@ cut that to roughly 1.1 MB. Re-run on a machine with `cwebp` installed.
    written that way, plus `verify-merge.sh` to prove the merge does not lose
    anything. Asset detail also grew an "+ Add" button on its transactions
    section: adding a second purchase of something already held meant searching
-   for it again from the FAB.
+   for it again from scratch.
 
 10. **Parked.** Dividend reinvestment (DRIP), where a dividend buys shares rather
    than paying cash. It needs per-position reinvestment settings and
@@ -808,11 +825,11 @@ cut that to roughly 1.1 MB. Re-run on a machine with `cwebp` installed.
    (glanceable net worth, the highest-frequency interaction a tracker has), a
    broker-aware CSV import that recognises DEGIRO, Trade Republic, Kraken and
    Bitvavo exports by their header row rather than making the user map columns,
-   and a per-year 1 January valuation, which several European wealth-tax
-   regimes ask for and which the daily snapshots can already answer exactly.
+   and a per-year 1 January valuation, which several European wealth-tax regimes
+   ask for and which the daily snapshots can already answer exactly.
 
-**Present a short plan before starting 10.** Milestones get agreed before
-they get built, not after.
+**Present a short plan before starting 10.** Milestones get agreed before they
+get built, not after.
 
 ## Verified in the sandbox, 2026-08-26
 
