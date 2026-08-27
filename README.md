@@ -10,6 +10,40 @@ which instruments to price.
 Named after Cyberpunk 2077's eurodollars, which turned out to fit: EUR and USD
 are the two currencies it ships with.
 
+## Screenshots
+
+<table>
+  <tr>
+    <td width="25%"><img src="docs/screenshots/01-home-screen-combined.png" alt="Portfolio, crypto and stocks combined"></td>
+    <td width="25%"><img src="docs/screenshots/04-insights-screen.png" alt="Allocation ring and profit breakdown"></td>
+    <td width="25%"><img src="docs/screenshots/07-asset-detail-screen.png" alt="Asset detail with chart and cost basis"></td>
+    <td width="25%"><img src="docs/screenshots/03-all-transactions-screen.png" alt="The full transaction ledger"></td>
+  </tr>
+  <tr>
+    <td align="center"><b>Everything in one place</b><br><sub>Or filtered to crypto, or to stocks</sub></td>
+    <td align="center"><b>Where the money sits</b><br><sub>Allocation, realised and unrealised</sub></td>
+    <td align="center"><b>Per asset</b><br><sub>Cost basis, average cost, custody</sub></td>
+    <td align="center"><b>Every transaction</b><br><sub>Buys, sells, dividends, rewards</sub></td>
+  </tr>
+  <tr>
+    <td width="25%"><img src="docs/screenshots/02-home-screen-filter-crypto.png" alt="Portfolio filtered to crypto"></td>
+    <td width="25%"><img src="docs/screenshots/06-markets-screen.png" alt="Market list with search"></td>
+    <td width="25%"><img src="docs/screenshots/08-add-transaction-screen.png" alt="Adding a transaction"></td>
+    <td width="25%"><img src="docs/screenshots/09-settings-screen.png" alt="Settings organised by subject"></td>
+  </tr>
+  <tr>
+    <td align="center"><b>One class at a time</b><br><sub>Crypto and stocks each stand alone</sub></td>
+    <td align="center"><b>Markets</b><br><sub>Coins, shares, or an ISIN on Tradegate</sub></td>
+    <td align="center"><b>Adding a position</b><br><sub>Any currency, converted for you</sub></td>
+    <td align="center"><b>Settings</b><br><sub>Grouped by subject, not by widget</sub></td>
+  </tr>
+</table>
+
+[See all screenshots](docs/screenshots/)
+
+<sub>From the demo build (`make demo`), which ships a fabricated portfolio. The
+numbers are invented. The prices, charts and staking figures in it are live.</sub>
+
 ## What it does
 
 - **Live crypto prices** over a public WebSocket from Kraken or Binance, your
