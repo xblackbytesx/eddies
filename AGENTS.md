@@ -109,6 +109,13 @@ and cost basis all run through the real code against the real feeds, which is
 what makes the screenshots honest. The demo Cardano stake address is a real
 public one, so the staking figure is fetched through the real Koios path.
 
+**If you ever swap that address, pick one that has never withdrawn** and check
+`withdrawals` on `/account_info` first. Pending rewards are earned minus
+withdrawn, so an address whose owner cashes out reports zero from then on, and
+the staking screenshot shows nothing where the whole point was a number. The
+original choice here did exactly that, silently, some time after it was picked.
+An account that has never withdrawn only accumulates.
+
 Consequence worth knowing: totals move between screenshot sessions, because the
 prices are live. If a set of shots ever needs to match exactly, that is the
 argument for seeding price history too, and it is not built.
