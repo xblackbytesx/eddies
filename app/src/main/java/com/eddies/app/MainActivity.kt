@@ -42,7 +42,11 @@ class MainActivity : FragmentActivity() {
             applySecureFlag(windowSecurity.shouldSecureWindow(state.hideInRecents))
 
             EddiesTheme(themeMode = state.themeMode, dynamicColor = state.dynamicColor) {
-                EddiesNavHost(locked = state.locked, onUnlocked = rootViewModel::onUnlocked)
+                EddiesNavHost(
+                    locked = state.locked,
+                    onUnlocked = rootViewModel::onUnlocked,
+                    hideNavOnScroll = state.hideNavOnScroll,
+                )
             }
         }
     }

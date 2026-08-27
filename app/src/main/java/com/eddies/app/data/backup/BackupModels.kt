@@ -51,6 +51,8 @@ data class BackupSettings(
     val includeFeesInBasis: Boolean,
     val hideBalances: Boolean,
     val hideInRecents: Boolean,
+    /** Defaulted so a backup written before this setting existed still restores. */
+    val hideNavOnScroll: Boolean = false,
 )
 
 @Serializable
