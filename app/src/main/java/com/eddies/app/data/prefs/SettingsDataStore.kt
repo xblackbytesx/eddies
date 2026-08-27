@@ -62,7 +62,6 @@ data class AppSettings(
     val includeFeesInBasis: Boolean = true,
     // Security
     val appLockEnabled: Boolean = false,
-    val autoLockSeconds: Int = 60,
     val hideBalances: Boolean = false,
     val hideInRecents: Boolean = true,
     // Lifecycle
@@ -100,7 +99,6 @@ class SettingsDataStore @Inject constructor(
         val costBasisMethod = stringPreferencesKey("cost_basis_method")
         val includeFeesInBasis = booleanPreferencesKey("include_fees_in_basis")
         val appLockEnabled = booleanPreferencesKey("app_lock_enabled")
-        val autoLockSeconds = intPreferencesKey("auto_lock_seconds")
         val hideBalances = booleanPreferencesKey("hide_balances")
         val hideInRecents = booleanPreferencesKey("hide_in_recents")
         val onboarded = booleanPreferencesKey("onboarded")
@@ -127,7 +125,6 @@ class SettingsDataStore @Inject constructor(
             costBasisMethod = p[Keys.costBasisMethod].toEnum(CostBasisMethod.AVERAGE),
             includeFeesInBasis = p[Keys.includeFeesInBasis] ?: true,
             appLockEnabled = p[Keys.appLockEnabled] ?: false,
-            autoLockSeconds = p[Keys.autoLockSeconds] ?: 60,
             hideBalances = p[Keys.hideBalances] ?: false,
             hideInRecents = p[Keys.hideInRecents] ?: true,
             onboarded = p[Keys.onboarded] ?: false,
@@ -152,7 +149,6 @@ class SettingsDataStore @Inject constructor(
     suspend fun setCostBasisMethod(m: CostBasisMethod) = put(Keys.costBasisMethod, m.name)
     suspend fun setIncludeFeesInBasis(on: Boolean) = put(Keys.includeFeesInBasis, on)
     suspend fun setAppLockEnabled(on: Boolean) = put(Keys.appLockEnabled, on)
-    suspend fun setAutoLockSeconds(s: Int) = put(Keys.autoLockSeconds, s.coerceIn(0, 3600))
     suspend fun setHideBalances(on: Boolean) = put(Keys.hideBalances, on)
     suspend fun setHideInRecents(on: Boolean) = put(Keys.hideInRecents, on)
     suspend fun setOnboarded() = put(Keys.onboarded, true)

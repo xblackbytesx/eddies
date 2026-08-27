@@ -25,7 +25,10 @@ data class SettingsUiState(
     val geckoKeyDraft: String = "",
     val stockKeyDraft: String = "",
     val message: String? = null,
-)
+) {
+    /** The same list plus an off switch, since a second currency is optional. */
+    val secondaryCurrencies: List<String> get() = listOf("") + currencies
+}
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
@@ -58,7 +61,6 @@ class SettingsViewModel @Inject constructor(
     fun setCostBasisMethod(m: CostBasisMethod) = launch { settings.setCostBasisMethod(m) }
     fun setIncludeFees(v: Boolean) = launch { settings.setIncludeFeesInBasis(v) }
     fun setAppLock(v: Boolean) = launch { settings.setAppLockEnabled(v) }
-    fun setAutoLock(s: Int) = launch { settings.setAutoLockSeconds(s) }
     fun setHideBalances(v: Boolean) = launch { settings.setHideBalances(v) }
     fun setHideInRecents(v: Boolean) = launch { settings.setHideInRecents(v) }
 
