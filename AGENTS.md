@@ -624,6 +624,10 @@ Storage Access Framework.
 
 ### Expected lint noise
 
+On the `floating-nav-pill` branch it is 39, the extra one being
+`GradleDependency` saying material3 alpha27 is newer than the alpha18 pinned
+there. That pin is deliberate; see the version catalog comment.
+
 `make lint` reports 0 errors and 38 warnings, all of them known. 37 are
 `GradleDependency` / `NewerVersionAvailable` / `AndroidGradlePluginVersion`
 pointing at the AGP 9 upgrade declined above. The last is `ObsoleteSdkInt` on
@@ -833,3 +837,118 @@ What is NOT verified here, by construction: there is no phone, so nothing about
 SQLCipher opening a database, the biometric prompt, socket behaviour under real
 backgrounding, or how the charts feel has been observed. That is the user's to
 run.
+
+## The floating navigation pill (branch: `floating-nav-pill`)
+
+An experiment, deliberately isolated from master. The bottom `NavigationBar` is
+replaced by `HorizontalFloatingToolbar`: a rounded pill that hovers over the
+content instead of reserving a strip of it, with the selected tab showing its
+label and the rest icon only.
+
+**Why it needs an alpha.** `HorizontalFloatingToolbar` is a real Material 3
+component but is not in material3 1.4.0 stable, which ships only
+`FloatingToolbarTokens`. There is no stable 1.5.0. So the version catalog
+overrides the Compose BOM for material3 alone.
+
+**Why alpha18 and not the newest.** alpha19 raises `minCompileSdk` to 37 and
+`minAndroidGradlePluginVersion` to 9.1.0. That is the identical wall that keeps
+sqlcipher at 4.9.0, and taking it would drag AGP, the Docker image and CI along.
+alpha18 is the last one that asks for compileSdk 35 and AGP 8.6.0, both of which
+this project already exceeds. Found by probing each alpha's
+`aar-metadata.properties` rather than by upgrading and seeing what broke.
+
+It still pulls compose foundation and ui from 1.9.3 up to 1.11.0-beta02,
+transitively, because the alpha requires it. Everything builds and all tests
+pass, but that is a beta Compose runtime under the whole app, which is the real
+reason this is a branch and not a commit on master.
+
+**No bottomBar and no Scaffold FAB slot any more.** The pill is an overlay inside
+the Scaffold content, aligned bottom-centre, applying
+`WindowInsets.navigationBars` itself since it sits outside any inset-aware slot.
+This works only because every tab screen already ends with 96.dp of bottom
+padding, which is now load-bearing: a new tab screen that forgets it will have
+its last row sitting under the pill.
+
+**That overlay Box must be `fillMaxSize`.** A Box wraps its content, so
+`Alignment.BottomCenter` means the bottom of whatever is currently measured. On a
+cold navigation the incoming screen deliberately renders nothing for 400ms
+(`LoadingPlaceholder`, so a populated database never flashes an empty state), the
+Box collapses to roughly the pill's own height, and the pill draws near the top
+of a black screen before being shoved back into place once content arrives. It
+looks like a broken transition and it is a layout bug. The Scaffold used to own
+that positioning through `bottomBar`; taking the pill out of that slot made it
+the Box's job.
+
+**The add button is a top bar action, not a FAB.** A tracker is read-mostly:
+positions are added occasionally and looked at daily, so a permanently docked
+button claimed more of the screen than the action earns, and it left two floating
+objects competing at the bottom edge. It now sits beside the transactions icon on
+the portfolio screen. Discovery is unaffected: the empty state still leads with a
+full-width button, which is the only moment it matters.
+
+Removing it also fixed a second problem. Pairing the FAB with the pill meant the
+whole pill slid sideways whenever you left the portfolio tab, moving the target
+out from under the finger that had just tapped it. With nothing else at the
+bottom, the pill is centred once and stays there.
+
+**The colours are deliberately not the Material defaults.** The stock checked
+`ToggleButton` fills with solid `primary`, and this app's primary is a bright
+cyan on a near-black background, so one glowing lozenge outshone the whole
+screen. The selected tab now gets a 16% cyan wash with cyan content, and the
+toolbar uses `standardFloatingToolbarColors` rather than the vibrant set.
+
+**The pill is edged, not shadowed.** List rows and the stock toolbar both land
+on `surfaceContainer`, so a card scrolling behind the pill merged into it. The
+container moves one step to `surfaceContainerHigh` and the pill takes a 1.dp
+`outlineVariant` rim.
+
+The rim is there because **a drop shadow cannot work on this theme**. Android
+shadows darken what is behind them, and darkening a 0xFF0B0E11 background
+produces nothing. Every "raise the elevation" answer to a separation problem is
+invisible on OLED, which is why well-made dark interfaces edge their floating
+surfaces instead. `outlineVariant` rather than a white alpha because it is a mid
+tone in both schemes, so one line lifts the edge in the dark theme and settles
+it in the light one.
+
+**Not verified here:** how any of it actually looks, and in particular whether
+the 1.dp rim reads as crisp or as a drawn-on outline. That needs the phone, and
+the rim is the one choice here most likely to want a nudge, either in weight or
+in how far the container tone is lifted.
+
+**The pill swallows every touch that lands on it.** A tap in its padding, or in a
+gap between two items, hits no pointer input node inside the pill, so the hit
+test carries on to the NavHost sibling underneath and opens whichever card is
+scrolled beneath the bar. The finger was in the right place; the dead zone was.
+It reads as a mistap on the navigation and it is one, just not the user's.
+
+The fix is a `pointerInput` on the toolbar consuming on `PointerEventPass.Main`.
+The pass matters: `Initial` travels parent to child and would eat taps before any
+`ToggleButton` saw them; `Main` travels child to parent, so the buttons get first
+refusal and the container only mops up what they left. A full-width `bottomBar`
+never had this problem because nothing was behind it.
+
+**Auto-hide on scroll is a setting, off by default.** Settings > General >
+Appearance > "Hide navigation when scrolling", stored as `hideNavOnScroll` and
+carried in backups with a default so older backup files still restore.
+
+It uses Material's own `FloatingToolbarDefaults.exitAlwaysScrollBehavior`, not
+anything hand-rolled. The behaviour *is* a `NestedScrollConnection`, so it is
+attached with `Modifier.nestedScroll` on the Box wrapping the NavHost rather than
+per screen: nested scroll propagates upward, so one ancestor covers every list.
+
+**The offset is placed by hand, not passed to the toolbar.** Handing the
+component its `scrollBehavior` parameter applies the offset inside its own
+layout, which is inside everything in the modifier chain: the container slid
+away on scroll and the border stayed put, drawing an empty outline where the
+pill had been. `FloatingToolbarScrollBehavior.floatingScrollBehavior` is public
+for exactly this. It goes above the border and the touch handling so both travel
+with the pill. Anything else decorating the pill from the outside has to sit
+below it too.
+
+Off by default on purpose. Hiding an app bar is uncontroversial; hiding the only
+way to change tabs is not, and the two positions are both reasonable. That is the
+line for adding a setting at all in this app: a genuine disagreement about
+behaviour earns one, differing taste in chrome does not. The same reasoning is
+why there is no full-bar-versus-pill toggle. Two navigation layouts would have to
+be maintained forever, each with its own padding contract, so that nobody has to
+adapt to a bar in a day.
