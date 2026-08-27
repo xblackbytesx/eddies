@@ -89,7 +89,7 @@ invariants and the things that look wrong until you know why.
 
 ## Licence
 
-GPLv3. See [LICENSE](LICENSE).
+Free software under the [GPLv3](LICENSE).
 
 In short: use it, study it, change it, share it. If you distribute a modified
 version you have to publish your changes under the same licence. That is the
