@@ -355,11 +355,24 @@ private fun FloatingNavPill(
     // floating surfaces rather than shadowing them.
     val pillShape = FloatingToolbarDefaults.ContainerShape
 
+    // The slide-away offset, placed by hand rather than handed to the toolbar.
+    //
+    // Passing `scrollBehavior` to the component applies the offset inside its
+    // own layout, which is inside everything in the modifier chain below. The
+    // container slid away on scroll and the border stayed behind, drawing an
+    // empty outline where the pill used to be. `floatingScrollBehavior` is
+    // public for exactly this: put it above the border and the rim travels with
+    // the thing it is tracing.
+    val exitOffset = if (scrollBehavior != null) {
+        with(scrollBehavior) { Modifier.floatingScrollBehavior() }
+    } else {
+        Modifier
+    }
+
     HorizontalFloatingToolbar(
         // Always expanded: this is navigation, not a contextual toolbar, and it
         // must not collapse itself out from under a scrolling list.
         expanded = true,
-        scrollBehavior = scrollBehavior,
         shape = pillShape,
         colors = FloatingToolbarDefaults.standardFloatingToolbarColors(
             // One tonal step above the cards rather than level with them.
@@ -371,10 +384,13 @@ private fun FloatingNavPill(
             // is this composable's own problem.
             .windowInsetsPadding(WindowInsets.navigationBars)
             .padding(bottom = FloatingToolbarDefaults.ScreenOffset)
-            // Last, so it traces the pill itself and not the padding around it.
-            // outlineVariant rather than a white alpha: it is a mid tone in both
-            // schemes, so the rim lifts the edge in the dark theme and settles
-            // it in the light one, from one line.
+            // Above the border and the touch handling, so both move with the
+            // pill when it slides away rather than being left behind.
+            .then(exitOffset)
+            // After the padding, so it traces the pill itself and not the space
+            // around it. outlineVariant rather than a white alpha: it is a mid
+            // tone in both schemes, so the rim lifts the edge in the dark theme
+            // and settles it in the light one, from one line.
             .border(1.dp, scheme.outlineVariant, pillShape)
             // The pill swallows every touch that lands on it, including the ones
             // that miss a button.

@@ -935,8 +935,15 @@ It uses Material's own `FloatingToolbarDefaults.exitAlwaysScrollBehavior`, not
 anything hand-rolled. The behaviour *is* a `NestedScrollConnection`, so it is
 attached with `Modifier.nestedScroll` on the Box wrapping the NavHost rather than
 per screen: nested scroll propagates upward, so one ancestor covers every list.
-`HorizontalFloatingToolbar` takes the same object as `scrollBehavior` and
-animates itself off the bottom edge.
+
+**The offset is placed by hand, not passed to the toolbar.** Handing the
+component its `scrollBehavior` parameter applies the offset inside its own
+layout, which is inside everything in the modifier chain: the container slid
+away on scroll and the border stayed put, drawing an empty outline where the
+pill had been. `FloatingToolbarScrollBehavior.floatingScrollBehavior` is public
+for exactly this. It goes above the border and the touch handling so both travel
+with the pill. Anything else decorating the pill from the outside has to sit
+below it too.
 
 Off by default on purpose. Hiding an app bar is uncontroversial; hiding the only
 way to change tabs is not, and the two positions are both reasonable. That is the
