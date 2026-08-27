@@ -12,6 +12,17 @@ serialization = "1.9.0"
 # Compose
 activityCompose = "1.11.0"
 composeBom = "2025.10.00"
+# Overrides the BOM for material3 only. HorizontalFloatingToolbar is the whole
+# reason: 1.4.0 stable ships its design tokens and not the composable, and there
+# is no stable 1.5.0 yet (checked 2026-08-27, latest is 1.5.0-alpha27).
+#
+# Pinned to alpha18 and not to the newest alpha on purpose. alpha19 raises
+# minCompileSdk to 37 and minAndroidGradlePluginVersion to 9.1.0, which is the
+# same wall that keeps sqlcipher at 4.9.0: taking it would drag AGP, the
+# container and CI along with it. alpha18 asks for compileSdk 35 and AGP 8.6.0,
+# both of which this project already exceeds. It still pulls compose foundation
+# and ui up to 1.11.0-beta02, which is why this lives on a branch.
+material3Alpha = "1.5.0-alpha18"
 navigationCompose = "2.9.5"
 lifecycle = "2.9.4"
 
@@ -56,14 +67,15 @@ kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-
 kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "coroutines" }
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "serialization" }
 
-# Compose artifacts intentionally carry no version: the BOM governs them.
+# Compose artifacts intentionally carry no version: the BOM governs them. The one
+# exception is material3, pinned above to an alpha for HorizontalFloatingToolbar.
 androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
 androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
 androidx-ui = { group = "androidx.compose.ui", name = "ui" }
 androidx-ui-graphics = { group = "androidx.compose.ui", name = "ui-graphics" }
 androidx-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
 androidx-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
-androidx-material3 = { group = "androidx.compose.material3", name = "material3" }
+androidx-material3 = { group = "androidx.compose.material3", name = "material3", version.ref = "material3Alpha" }
 androidx-material-icons-extended = { group = "androidx.compose.material", name = "material-icons-extended" }
 androidx-navigation-compose = { group = "androidx.navigation", name = "navigation-compose", version.ref = "navigationCompose" }
 androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycle" }
