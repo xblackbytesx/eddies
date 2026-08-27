@@ -1,9 +1,16 @@
 package com.eddies.app.navigation
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Insights
@@ -13,20 +20,24 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.FloatingToolbarDefaults
+import androidx.compose.material3.HorizontalFloatingToolbar
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.ToggleButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.unit.dp
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
@@ -129,26 +140,6 @@ fun EddiesNavHost(
                 },
             )
         },
-        bottomBar = {
-            if (isTab) {
-                NavigationBar {
-                    tabs.forEach { tab ->
-                        NavigationBarItem(
-                            selected = destination?.hasRoute(tab.routeClass) == true,
-                            onClick = {
-                                navController.navigate(tab.route) {
-                                    popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                                    launchSingleTop = true
-                                    restoreState = true
-                                }
-                            },
-                            icon = { Icon(tab.icon, contentDescription = tab.label) },
-                            label = { Text(tab.label) },
-                        )
-                    }
-                }
-            }
-        },
         floatingActionButton = {
             // Only where adding a position is the obvious next action.
             if (destination?.hasRoute(PortfolioRoute::class) == true) {
@@ -229,6 +220,20 @@ fun EddiesNavHost(
                 composable<BackupRoute> { BackupScreen() }
                 composable<AboutRoute> { AboutScreen() }
             }
+
+            if (isTab) {
+                FloatingNavPill(
+                    isSelected = { tab -> destination?.hasRoute(tab.routeClass) == true },
+                    onSelect = { tab ->
+                        navController.navigate(tab.route) {
+                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    },
+                    modifier = Modifier.align(Alignment.BottomCenter),
+                )
+            }
         }
     }
 
@@ -247,5 +252,56 @@ fun EddiesNavHost(
             LockScreen(onUnlocked = onUnlocked)
         }
     }
+    }
+}
+
+/**
+ * The bottom navigation, as a floating pill rather than a full-width bar.
+ *
+ * `HorizontalFloatingToolbar` is a real Material 3 component, but only in
+ * material3 1.5.0-alpha27: 1.4.0 stable ships its design tokens and not the
+ * composable. That alpha is why the version catalog overrides the Compose BOM
+ * for material3 alone, and why this lives on its own branch.
+ *
+ * Selected tab shows its label, the others are icon only. Four labels do not fit
+ * a pill at any readable size, and a pill of four unlabelled icons is a guessing
+ * game, so the label follows the selection. That also gives the thing something
+ * to animate, which is most of why the shape is worth having.
+ */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun FloatingNavPill(
+    isSelected: (Tab) -> Boolean,
+    onSelect: (Tab) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    HorizontalFloatingToolbar(
+        // Always expanded: this is navigation, not a contextual toolbar, and it
+        // must not collapse itself out from under a scrolling list.
+        expanded = true,
+        colors = FloatingToolbarDefaults.vibrantFloatingToolbarColors(),
+        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 6.dp),
+        modifier = modifier
+            // The overlay sits outside any inset-aware slot, so the gesture bar
+            // is this composable's own problem.
+            .windowInsetsPadding(WindowInsets.navigationBars)
+            .padding(bottom = FloatingToolbarDefaults.ScreenOffset),
+    ) {
+        tabs.forEach { tab ->
+            val selected = isSelected(tab)
+            ToggleButton(
+                checked = selected,
+                onCheckedChange = { if (!selected) onSelect(tab) },
+                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
+            ) {
+                Icon(tab.icon, contentDescription = tab.label, modifier = Modifier.size(20.dp))
+                AnimatedVisibility(visible = selected) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Spacer(Modifier.size(8.dp))
+                        Text(tab.label, style = MaterialTheme.typography.labelLarge, maxLines = 1)
+                    }
+                }
+            }
+        }
     }
 }

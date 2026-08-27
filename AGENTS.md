@@ -624,6 +624,10 @@ Storage Access Framework.
 
 ### Expected lint noise
 
+On the `floating-nav-pill` branch it is 39, the extra one being
+`GradleDependency` saying material3 alpha27 is newer than the alpha18 pinned
+there. That pin is deliberate; see the version catalog comment.
+
 `make lint` reports 0 errors and 38 warnings, all of them known. 37 are
 `GradleDependency` / `NewerVersionAvailable` / `AndroidGradlePluginVersion`
 pointing at the AGP 9 upgrade declined above. The last is `ObsoleteSdkInt` on
@@ -833,3 +837,37 @@ What is NOT verified here, by construction: there is no phone, so nothing about
 SQLCipher opening a database, the biometric prompt, socket behaviour under real
 backgrounding, or how the charts feel has been observed. That is the user's to
 run.
+
+## The floating navigation pill (branch: `floating-nav-pill`)
+
+An experiment, deliberately isolated from master. The bottom `NavigationBar` is
+replaced by `HorizontalFloatingToolbar`: a rounded pill that hovers over the
+content instead of reserving a strip of it, with the selected tab showing its
+label and the rest icon only.
+
+**Why it needs an alpha.** `HorizontalFloatingToolbar` is a real Material 3
+component but is not in material3 1.4.0 stable, which ships only
+`FloatingToolbarTokens`. There is no stable 1.5.0. So the version catalog
+overrides the Compose BOM for material3 alone.
+
+**Why alpha18 and not the newest.** alpha19 raises `minCompileSdk` to 37 and
+`minAndroidGradlePluginVersion` to 9.1.0. That is the identical wall that keeps
+sqlcipher at 4.9.0, and taking it would drag AGP, the Docker image and CI along.
+alpha18 is the last one that asks for compileSdk 35 and AGP 8.6.0, both of which
+this project already exceeds. Found by probing each alpha's
+`aar-metadata.properties` rather than by upgrading and seeing what broke.
+
+It still pulls compose foundation and ui from 1.9.3 up to 1.11.0-beta02,
+transitively, because the alpha requires it. Everything builds and all tests
+pass, but that is a beta Compose runtime under the whole app, which is the real
+reason this is a branch and not a commit on master.
+
+**No bottomBar any more.** The pill is an overlay inside the Scaffold content,
+aligned bottom-centre, applying `WindowInsets.navigationBars` itself since it
+sits outside any inset-aware slot. That works only because every tab screen
+already ends with 96.dp of bottom padding. A new tab screen that forgets it will
+have its last row sitting under the pill.
+
+**Not verified here:** how it actually looks and feels, whether the pill crowds
+the FAB on the portfolio screen, and whether the label animation is pleasant or
+distracting. All of that needs the phone.
