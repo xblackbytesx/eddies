@@ -19,13 +19,19 @@ local.properties
 # CI staging dir (.github/workflows/release.yml collects APKs here)
 dist/
 
-# --- IDE / agent tooling ---
+# --- IDE / assistant tooling ---
+# Local scratch directories various editors and coding assistants create in the
+# repo root. None of them belong in the history.
 .idea/
+.vscode/
 .claude/
+.cursor/
+.aider*
+.continue/
+.windsurf/
 *.iml
 *.ipr
 *.iws
-.vscode/
 
 # --- Signing ---
 # The committed debug keystore is the only exception, so every debug build signs
