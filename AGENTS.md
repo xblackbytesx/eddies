@@ -914,3 +914,15 @@ it in the light one.
 the 1.dp rim reads as crisp or as a drawn-on outline. That needs the phone, and
 the rim is the one choice here most likely to want a nudge, either in weight or
 in how far the container tone is lifted.
+
+**The pill swallows every touch that lands on it.** A tap in its padding, or in a
+gap between two items, hits no pointer input node inside the pill, so the hit
+test carries on to the NavHost sibling underneath and opens whichever card is
+scrolled beneath the bar. The finger was in the right place; the dead zone was.
+It reads as a mistap on the navigation and it is one, just not the user's.
+
+The fix is a `pointerInput` on the toolbar consuming on `PointerEventPass.Main`.
+The pass matters: `Initial` travels parent to child and would eat taps before any
+`ToggleButton` saw them; `Main` travels child to parent, so the buttons get first
+refusal and the container only mops up what they left. A full-width `bottomBar`
+never had this problem because nothing was behind it.

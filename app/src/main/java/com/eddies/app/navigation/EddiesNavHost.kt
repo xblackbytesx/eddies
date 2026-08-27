@@ -39,6 +39,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -345,7 +347,29 @@ private fun FloatingNavPill(
             // outlineVariant rather than a white alpha: it is a mid tone in both
             // schemes, so the rim lifts the edge in the dark theme and settles
             // it in the light one, from one line.
-            .border(1.dp, scheme.outlineVariant, pillShape),
+            .border(1.dp, scheme.outlineVariant, pillShape)
+            // The pill swallows every touch that lands on it, including the ones
+            // that miss a button.
+            //
+            // Without this, a tap in the padding or in a gap between two items
+            // hits nothing in the pill, so the hit test carries on to the
+            // NavHost sibling underneath and opens whichever card happened to be
+            // scrolled beneath the bar. It feels exactly like a mistap on the
+            // navigation, which is what it is, except the finger was in the
+            // right place: the dead zone was.
+            //
+            // Consuming on the Main pass and not the Initial one is what keeps
+            // the items working. Initial travels parent to child, so consuming
+            // there would eat the taps before any ToggleButton saw them; Main
+            // travels child to parent, so the buttons get first refusal and this
+            // only mops up what they left.
+            .pointerInput(Unit) {
+                awaitPointerEventScope {
+                    while (true) {
+                        awaitPointerEvent(PointerEventPass.Main).changes.forEach { it.consume() }
+                    }
+                }
+            },
     ) {
         tabs.forEachIndexed { index, tab ->
             if (index > 0) Spacer(Modifier.size(6.dp))
