@@ -1,7 +1,6 @@
 package com.eddies.app.navigation
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -131,6 +130,15 @@ fun EddiesNavHost(
                                 contentDescription = "All transactions",
                             )
                         }
+                        // Where the FAB used to be. A tracker is read-mostly:
+                        // positions are added occasionally and looked at daily,
+                        // so a permanently docked button was claiming more of
+                        // the screen than the action earns. The empty state
+                        // still leads with a full-width button, which is where
+                        // discovery actually matters.
+                        IconButton(onClick = { navController.navigate(AddPositionSearchRoute) }) {
+                            Icon(Icons.Default.Add, contentDescription = "Add a position")
+                        }
                     }
                 },
                 navigationIcon = {
@@ -142,10 +150,20 @@ fun EddiesNavHost(
                 },
             )
         },
-        // The add button is not in this slot any more: it sits in the same row
-        // as the navigation pill so the two are centred together as one unit.
+        // No floatingActionButton slot: adding a position is a top bar action on
+        // the portfolio screen now, which leaves the bottom of the screen to
+        // navigation alone.
     ) { padding ->
-        Box(Modifier.padding(padding)) {
+        // fillMaxSize is load-bearing, not decoration. A Box wraps its content,
+        // so BottomCenter means "the bottom of whatever happens to be measured
+        // right now". On a cold navigation the incoming screen renders nothing
+        // for a moment (LoadingPlaceholder holds back for 400ms rather than
+        // flashing an empty state), the Box collapses to about the height of the
+        // pill itself, and the pill draws near the top of a black screen before
+        // being shoved back down once content arrives. The Scaffold used to own
+        // that positioning via bottomBar; taking the pill out of that slot made
+        // it this Box's job.
+        Box(Modifier.padding(padding).fillMaxSize()) {
             NavHost(navController = navController, startDestination = PortfolioRoute) {
                 composable<PortfolioRoute> {
                     PortfolioScreen(
@@ -227,12 +245,6 @@ fun EddiesNavHost(
                             restoreState = true
                         }
                     },
-                    // Only where adding a position is the obvious next action.
-                    onAdd = if (destination?.hasRoute(PortfolioRoute::class) == true) {
-                        { navController.navigate(AddPositionSearchRoute) }
-                    } else {
-                        null
-                    },
                     modifier = Modifier.align(Alignment.BottomCenter),
                 )
             }
@@ -258,9 +270,9 @@ fun EddiesNavHost(
 }
 
 
+
 /**
- * The bottom navigation, as a floating pill rather than a full-width bar, with
- * the add button beside it so the pair reads as one centred unit.
+ * The bottom navigation, as a floating pill rather than a full-width bar.
  *
  * `HorizontalFloatingToolbar` is a real Material 3 component, but only in
  * material3 1.5.0-alpha18: 1.4.0 stable ships its design tokens and not the
@@ -277,13 +289,17 @@ fun EddiesNavHost(
  * outshines the entire screen. The selected tab instead gets a low-alpha cyan
  * wash with cyan content: still unmistakably the selected one, without becoming
  * the brightest thing in the app.
+ *
+ * Nothing shares the bottom of the screen with it any more, so it is centred
+ * once and stays there. Pairing it with the add button meant the whole pill slid
+ * sideways whenever you left the portfolio tab, which moved the target out from
+ * under the finger that had just tapped it.
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun FloatingNavPill(
     isSelected: (Tab) -> Boolean,
     onSelect: (Tab) -> Unit,
-    onAdd: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     val scheme = MaterialTheme.colorScheme
@@ -296,55 +312,34 @@ private fun FloatingNavPill(
         checkedContentColor = scheme.primary,
     )
 
-    Row(
+    HorizontalFloatingToolbar(
+        // Always expanded: this is navigation, not a contextual toolbar, and it
+        // must not collapse itself out from under a scrolling list.
+        expanded = true,
+        colors = FloatingToolbarDefaults.standardFloatingToolbarColors(),
+        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
         modifier = modifier
             // The overlay sits outside any inset-aware slot, so the gesture bar
             // is this composable's own problem.
             .windowInsetsPadding(WindowInsets.navigationBars)
             .padding(bottom = FloatingToolbarDefaults.ScreenOffset),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        HorizontalFloatingToolbar(
-            // Always expanded: this is navigation, not a contextual toolbar, and
-            // it must not collapse itself out from under a scrolling list.
-            expanded = true,
-            colors = FloatingToolbarDefaults.standardFloatingToolbarColors(),
-            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
-        ) {
-            tabs.forEachIndexed { index, tab ->
-                if (index > 0) Spacer(Modifier.size(6.dp))
-                val selected = isSelected(tab)
-                ToggleButton(
-                    checked = selected,
-                    onCheckedChange = { if (!selected) onSelect(tab) },
-                    colors = itemColors,
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
-                ) {
-                    Icon(tab.icon, contentDescription = tab.label, modifier = Modifier.size(20.dp))
-                    AnimatedVisibility(visible = selected) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Spacer(Modifier.size(8.dp))
-                            Text(tab.label, style = MaterialTheme.typography.labelLarge, maxLines = 1)
-                        }
+        tabs.forEachIndexed { index, tab ->
+            if (index > 0) Spacer(Modifier.size(6.dp))
+            val selected = isSelected(tab)
+            ToggleButton(
+                checked = selected,
+                onCheckedChange = { if (!selected) onSelect(tab) },
+                colors = itemColors,
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+            ) {
+                Icon(tab.icon, contentDescription = tab.label, modifier = Modifier.size(20.dp))
+                AnimatedVisibility(visible = selected) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Spacer(Modifier.size(8.dp))
+                        Text(tab.label, style = MaterialTheme.typography.labelLarge, maxLines = 1)
                     }
                 }
-            }
-        }
-
-        // Sized to the toolbar rather than left at the default 56.dp, so the two
-        // read as one row of equal height rather than as two stray objects.
-        //
-        // It appears only on the portfolio tab, which does mean the pill shifts
-        // sideways when you leave that tab. Keeping the pair centred was the
-        // explicit ask; reserving the space on every tab is the alternative if
-        // that movement turns out to be annoying.
-        if (onAdd != null) {
-            FloatingToolbarDefaults.StandardFloatingActionButton(
-                onClick = onAdd,
-                modifier = Modifier.size(FloatingToolbarDefaults.ContainerSize),
-            ) {
-                Icon(Icons.Default.Add, contentDescription = "Add a position")
             }
         }
     }
