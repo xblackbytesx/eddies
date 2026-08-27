@@ -69,13 +69,13 @@ Those requests name the instruments you are pricing. That is unavoidable for a p
 Backups are encrypted with a passphrase you choose, and are written wherever you point them. Nothing is uploaded."""
 
 // GPLv3 section 5 wants a distributed work to carry its own notice, so Eddies
-// states its own licence here rather than only in the repository.
-//
-// Add the canonical source URL to this block before publishing binaries.
-// Section 6 wants anyone holding the APK to be able to find the source, and the
-// release page is the natural thing to point at.
+// states its own licence here rather than only in the repository. The source URL
+// is section 6: anyone holding the APK has to be able to find the source.
 private const val LICENCES = """Eddies
+  Copyright (C) 2026 xblackbytesx
   GNU General Public License v3.0 or later
+  Source: https://github.com/xblackbytesx/eddies
+
   This is free software: you may change it and redistribute it.
   There is NO WARRANTY, to the extent permitted by law.
 
