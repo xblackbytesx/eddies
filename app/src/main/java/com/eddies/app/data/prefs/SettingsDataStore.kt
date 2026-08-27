@@ -46,6 +46,8 @@ data class AppSettings(
     val themeMode: ThemeMode = ThemeMode.DARK,
     val dynamicColor: Boolean = false,
     val compactRows: Boolean = false,
+    /** Off by default: navigation that vanishes is a taste, not an improvement. */
+    val hideNavOnScroll: Boolean = false,
     // Display
     val baseCurrency: String = "EUR",
     val secondaryCurrency: String = "USD",
@@ -87,6 +89,7 @@ class SettingsDataStore @Inject constructor(
         val themeMode = stringPreferencesKey("theme_mode")
         val dynamicColor = booleanPreferencesKey("dynamic_color")
         val compactRows = booleanPreferencesKey("compact_rows")
+        val hideNavOnScroll = booleanPreferencesKey("hide_nav_on_scroll")
         val baseCurrency = stringPreferencesKey("base_currency")
         val secondaryCurrency = stringPreferencesKey("secondary_currency")
         val advancedMode = booleanPreferencesKey("advanced_mode")
@@ -113,6 +116,7 @@ class SettingsDataStore @Inject constructor(
             themeMode = p[Keys.themeMode].toEnum(ThemeMode.DARK),
             dynamicColor = p[Keys.dynamicColor] ?: false,
             compactRows = p[Keys.compactRows] ?: false,
+            hideNavOnScroll = p[Keys.hideNavOnScroll] ?: false,
             baseCurrency = p[Keys.baseCurrency] ?: "EUR",
             secondaryCurrency = p[Keys.secondaryCurrency] ?: "USD",
             advancedMode = p[Keys.advancedMode] ?: false,
@@ -138,6 +142,7 @@ class SettingsDataStore @Inject constructor(
     suspend fun setThemeMode(mode: ThemeMode) = put(Keys.themeMode, mode.name)
     suspend fun setDynamicColor(on: Boolean) = put(Keys.dynamicColor, on)
     suspend fun setCompactRows(on: Boolean) = put(Keys.compactRows, on)
+    suspend fun setHideNavOnScroll(on: Boolean) = put(Keys.hideNavOnScroll, on)
     suspend fun setBaseCurrency(code: String) = put(Keys.baseCurrency, code.uppercase())
     suspend fun setSecondaryCurrency(code: String) = put(Keys.secondaryCurrency, code.uppercase())
     suspend fun setAdvancedMode(on: Boolean) = put(Keys.advancedMode, on)
