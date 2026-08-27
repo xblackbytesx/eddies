@@ -23,6 +23,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FloatingToolbarDefaults
+import androidx.compose.material3.FloatingToolbarExitDirection
 import androidx.compose.material3.HorizontalFloatingToolbar
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -40,6 +41,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavDestination.Companion.hasRoute
@@ -89,17 +91,33 @@ private val tabs = listOf(
  * Feature screens are pure content. Giving one its own Scaffold or TopAppBar
  * doubles the top inset, which is a bug that looks like a design choice.
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun EddiesNavHost(
     locked: Boolean,
     onUnlocked: () -> Unit,
+    hideNavOnScroll: Boolean = false,
 ) {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val destination = backStackEntry?.destination
 
     val isTab = tabs.any { tab -> destination?.hasRoute(tab.routeClass) == true }
+
+    // Material's own exit-on-scroll, rather than anything hand-rolled: the
+    // behaviour is a NestedScrollConnection, so the list reports its scrolling
+    // up the tree and the toolbar animates itself off the bottom edge.
+    //
+    // Null when the setting is off, which is the default. Navigation that
+    // disappears is a preference, not an improvement: some people want the
+    // space back, others want their tabs where they left them.
+    val exitOnScroll = if (hideNavOnScroll) {
+        FloatingToolbarDefaults.exitAlwaysScrollBehavior(
+            exitDirection = FloatingToolbarExitDirection.Bottom,
+        )
+    } else {
+        null
+    }
     val title = when {
         destination?.hasRoute(AssetDetailRoute::class) == true -> "Asset"
         destination?.hasRoute(AddTransactionRoute::class) == true -> "Transaction"
@@ -166,7 +184,14 @@ fun EddiesNavHost(
         // being shoved back down once content arrives. The Scaffold used to own
         // that positioning via bottomBar; taking the pill out of that slot made
         // it this Box's job.
-        Box(Modifier.padding(padding).fillMaxSize()) {
+        Box(
+            Modifier
+                .padding(padding)
+                .fillMaxSize()
+                // Nested scroll propagates upward, so the connection belongs on
+                // an ancestor of the lists rather than on each screen.
+                .let { if (exitOnScroll != null) it.nestedScroll(exitOnScroll) else it },
+        ) {
             NavHost(navController = navController, startDestination = PortfolioRoute) {
                 composable<PortfolioRoute> {
                     PortfolioScreen(
@@ -248,6 +273,7 @@ fun EddiesNavHost(
                             restoreState = true
                         }
                     },
+                    scrollBehavior = exitOnScroll,
                     modifier = Modifier.align(Alignment.BottomCenter),
                 )
             }
@@ -303,6 +329,7 @@ fun EddiesNavHost(
 private fun FloatingNavPill(
     isSelected: (Tab) -> Boolean,
     onSelect: (Tab) -> Unit,
+    scrollBehavior: androidx.compose.material3.FloatingToolbarScrollBehavior?,
     modifier: Modifier = Modifier,
 ) {
     val scheme = MaterialTheme.colorScheme
@@ -332,6 +359,7 @@ private fun FloatingNavPill(
         // Always expanded: this is navigation, not a contextual toolbar, and it
         // must not collapse itself out from under a scrolling list.
         expanded = true,
+        scrollBehavior = scrollBehavior,
         shape = pillShape,
         colors = FloatingToolbarDefaults.standardFloatingToolbarColors(
             // One tonal step above the cards rather than level with them.

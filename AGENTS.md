@@ -926,3 +926,22 @@ The pass matters: `Initial` travels parent to child and would eat taps before an
 `ToggleButton` saw them; `Main` travels child to parent, so the buttons get first
 refusal and the container only mops up what they left. A full-width `bottomBar`
 never had this problem because nothing was behind it.
+
+**Auto-hide on scroll is a setting, off by default.** Settings > General >
+Appearance > "Hide navigation when scrolling", stored as `hideNavOnScroll` and
+carried in backups with a default so older backup files still restore.
+
+It uses Material's own `FloatingToolbarDefaults.exitAlwaysScrollBehavior`, not
+anything hand-rolled. The behaviour *is* a `NestedScrollConnection`, so it is
+attached with `Modifier.nestedScroll` on the Box wrapping the NavHost rather than
+per screen: nested scroll propagates upward, so one ancestor covers every list.
+`HorizontalFloatingToolbar` takes the same object as `scrollBehavior` and
+animates itself off the bottom edge.
+
+Off by default on purpose. Hiding an app bar is uncontroversial; hiding the only
+way to change tabs is not, and the two positions are both reasonable. That is the
+line for adding a setting at all in this app: a genuine disagreement about
+behaviour earns one, differing taste in chrome does not. The same reasoning is
+why there is no full-bar-versus-pill toggle. Two navigation layouts would have to
+be maintained forever, each with its own padding contract, so that nobody has to
+adapt to a bar in a day.

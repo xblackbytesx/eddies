@@ -23,6 +23,7 @@ data class RootUiState(
     val themeMode: ThemeMode = ThemeMode.DARK,
     val dynamicColor: Boolean = false,
     val hideInRecents: Boolean = true,
+    val hideNavOnScroll: Boolean = false,
     val locked: Boolean = false,
     val onboarded: Boolean = false,
 )
@@ -53,6 +54,7 @@ class RootViewModel @Inject constructor(
             themeMode = cfg.themeMode,
             dynamicColor = cfg.dynamicColor,
             hideInRecents = cfg.hideInRecents,
+            hideNavOnScroll = cfg.hideNavOnScroll,
             locked = cfg.appLockEnabled && !isUnlocked,
             onboarded = cfg.onboarded,
         )

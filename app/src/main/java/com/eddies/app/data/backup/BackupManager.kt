@@ -163,6 +163,7 @@ class BackupManager @Inject constructor(
         settings.setIncludeFeesInBasis(s.includeFeesInBasis)
         settings.setHideBalances(s.hideBalances)
         settings.setHideInRecents(s.hideInRecents)
+        settings.setHideNavOnScroll(s.hideNavOnScroll)
         // The API key and the app-lock PIN are deliberately NOT in the backup.
         // They are sealed by this device's Keystore, and a passphrase-protected
         // file is a weaker place for them than where they already are.
@@ -184,6 +185,7 @@ private fun com.eddies.app.data.prefs.AppSettings.toBackup() = BackupSettings(
     includeFeesInBasis = includeFeesInBasis,
     hideBalances = hideBalances,
     hideInRecents = hideInRecents,
+    hideNavOnScroll = hideNavOnScroll,
 )
 
 private fun AccountEntity.toBackup() = BackupAccount(

@@ -51,6 +51,7 @@ class SettingsViewModel @Inject constructor(
     fun setThemeMode(m: ThemeMode) = launch { settings.setThemeMode(m) }
     fun setDynamicColor(v: Boolean) = launch { settings.setDynamicColor(v) }
     fun setCompactRows(v: Boolean) = launch { settings.setCompactRows(v) }
+    fun setHideNavOnScroll(v: Boolean) = launch { settings.setHideNavOnScroll(v) }
     fun setBaseCurrency(c: String) = launch { settings.setBaseCurrency(c) }
     fun setSecondaryCurrency(c: String) = launch { settings.setSecondaryCurrency(c) }
     fun setAdvancedMode(v: Boolean) = launch { settings.setAdvancedMode(v) }

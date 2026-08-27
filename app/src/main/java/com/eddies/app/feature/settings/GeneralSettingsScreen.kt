@@ -41,6 +41,13 @@ fun GeneralSettingsScreen(
                 checked = cfg.compactRows,
                 onCheckedChange = viewModel::setCompactRows,
             )
+            HorizontalDivider()
+            SettingSwitch(
+                title = "Hide navigation when scrolling",
+                subtitle = "The bar slides away as you scroll down and returns on the way up.",
+                checked = cfg.hideNavOnScroll,
+                onCheckedChange = viewModel::setHideNavOnScroll,
+            )
         }
 
         Section("Currency") {
