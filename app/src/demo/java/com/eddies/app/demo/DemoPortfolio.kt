@@ -125,8 +125,20 @@ object DemoPortfolio {
      * everything else, so the demo exercises the real Koios path rather than a
      * fake one. It is somebody's public address, visible on any explorer, and
      * carries no private information.
+     *
+     * **Pick one that has never withdrawn**, and check `withdrawals` on
+     * `/account_info` before swapping this. Pending rewards are earned minus
+     * withdrawn, so an address whose owner cashes out reads as zero from that
+     * moment on, and the staking screenshot then shows the one number the
+     * feature exists to show as nothing. The previous address here did exactly
+     * that. An account that has never withdrawn only accumulates.
+     *
+     * At the time of choosing: 15,571 ADA staked, 578 pending, nothing ever
+     * withdrawn. The balance is close to the demo's own 12,000 ADA on purpose,
+     * so the reward reads as a plausible year of yield rather than as a number
+     * belonging to a different portfolio.
      */
-    const val STAKE_ADDRESS = "stake1uyrx65wjqjgeeksd8hptmcgl5jfyrqkfq0xe8xlp367kphsckq250"
+    const val STAKE_ADDRESS = "stake1u9328yufzq6j2235jhlnkunj4tdp0wy8vvykcv5yjvwkqdsyhlxsx"
 
     fun epochMillis(date: String): Long =
         LocalDate.parse(date).atStartOfDay().toInstant(ZoneOffset.UTC).toEpochMilli()
