@@ -897,6 +897,20 @@ cyan on a near-black background, so one glowing lozenge outshone the whole
 screen. The selected tab now gets a 16% cyan wash with cyan content, and the
 toolbar uses `standardFloatingToolbarColors` rather than the vibrant set.
 
-**Not verified here:** how it actually looks and feels, whether the pill crowds
-the FAB on the portfolio screen, and whether the label animation is pleasant or
-distracting. All of that needs the phone.
+**The pill is edged, not shadowed.** List rows and the stock toolbar both land
+on `surfaceContainer`, so a card scrolling behind the pill merged into it. The
+container moves one step to `surfaceContainerHigh` and the pill takes a 1.dp
+`outlineVariant` rim.
+
+The rim is there because **a drop shadow cannot work on this theme**. Android
+shadows darken what is behind them, and darkening a 0xFF0B0E11 background
+produces nothing. Every "raise the elevation" answer to a separation problem is
+invisible on OLED, which is why well-made dark interfaces edge their floating
+surfaces instead. `outlineVariant` rather than a white alpha because it is a mid
+tone in both schemes, so one line lifts the edge in the dark theme and settles
+it in the light one.
+
+**Not verified here:** how any of it actually looks, and in particular whether
+the 1.dp rim reads as crisp or as a drawn-on outline. That needs the phone, and
+the rim is the one choice here most likely to want a nudge, either in weight or
+in how far the container tone is lifted.

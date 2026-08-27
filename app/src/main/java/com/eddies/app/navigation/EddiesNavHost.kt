@@ -1,6 +1,7 @@
 package com.eddies.app.navigation
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -312,17 +313,39 @@ private fun FloatingNavPill(
         checkedContentColor = scheme.primary,
     )
 
+    // Separating the pill from the cards passing underneath it.
+    //
+    // They were the same colour, literally: list rows and the stock toolbar both
+    // land on surfaceContainer, so a card scrolling behind the pill merged with
+    // it. Two changes, because either alone is marginal.
+    //
+    // A drop shadow is not one of them. Android shadows darken what is behind
+    // them, and darkening a 0xFF0B0E11 background produces nothing at all. Every
+    // "add elevation" answer to this problem is invisible on OLED. What does
+    // work is a hairline rim, which is why well-made dark interfaces edge their
+    // floating surfaces rather than shadowing them.
+    val pillShape = FloatingToolbarDefaults.ContainerShape
+
     HorizontalFloatingToolbar(
         // Always expanded: this is navigation, not a contextual toolbar, and it
         // must not collapse itself out from under a scrolling list.
         expanded = true,
-        colors = FloatingToolbarDefaults.standardFloatingToolbarColors(),
+        shape = pillShape,
+        colors = FloatingToolbarDefaults.standardFloatingToolbarColors(
+            // One tonal step above the cards rather than level with them.
+            toolbarContainerColor = scheme.surfaceContainerHigh,
+        ),
         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
         modifier = modifier
             // The overlay sits outside any inset-aware slot, so the gesture bar
             // is this composable's own problem.
             .windowInsetsPadding(WindowInsets.navigationBars)
-            .padding(bottom = FloatingToolbarDefaults.ScreenOffset),
+            .padding(bottom = FloatingToolbarDefaults.ScreenOffset)
+            // Last, so it traces the pill itself and not the padding around it.
+            // outlineVariant rather than a white alpha: it is a mid tone in both
+            // schemes, so the rim lifts the edge in the dark theme and settles
+            // it in the light one, from one line.
+            .border(1.dp, scheme.outlineVariant, pillShape),
     ) {
         tabs.forEachIndexed { index, tab ->
             if (index > 0) Spacer(Modifier.size(6.dp))
