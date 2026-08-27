@@ -1,6 +1,7 @@
 package com.eddies.app.navigation
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -21,7 +22,6 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.FloatingToolbarDefaults
 import androidx.compose.material3.HorizontalFloatingToolbar
 import androidx.compose.material3.Icon
@@ -31,11 +31,13 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.ToggleButton
+import androidx.compose.material3.ToggleButtonDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavDestination.Companion.hasRoute
@@ -140,14 +142,8 @@ fun EddiesNavHost(
                 },
             )
         },
-        floatingActionButton = {
-            // Only where adding a position is the obvious next action.
-            if (destination?.hasRoute(PortfolioRoute::class) == true) {
-                FloatingActionButton(onClick = { navController.navigate(AddPositionSearchRoute) }) {
-                    Icon(Icons.Default.Add, contentDescription = "Add a position")
-                }
-            }
-        },
+        // The add button is not in this slot any more: it sits in the same row
+        // as the navigation pill so the two are centred together as one unit.
     ) { padding ->
         Box(Modifier.padding(padding)) {
             NavHost(navController = navController, startDestination = PortfolioRoute) {
@@ -231,6 +227,12 @@ fun EddiesNavHost(
                             restoreState = true
                         }
                     },
+                    // Only where adding a position is the obvious next action.
+                    onAdd = if (destination?.hasRoute(PortfolioRoute::class) == true) {
+                        { navController.navigate(AddPositionSearchRoute) }
+                    } else {
+                        null
+                    },
                     modifier = Modifier.align(Alignment.BottomCenter),
                 )
             }
@@ -255,52 +257,94 @@ fun EddiesNavHost(
     }
 }
 
+
 /**
- * The bottom navigation, as a floating pill rather than a full-width bar.
+ * The bottom navigation, as a floating pill rather than a full-width bar, with
+ * the add button beside it so the pair reads as one centred unit.
  *
  * `HorizontalFloatingToolbar` is a real Material 3 component, but only in
- * material3 1.5.0-alpha27: 1.4.0 stable ships its design tokens and not the
+ * material3 1.5.0-alpha18: 1.4.0 stable ships its design tokens and not the
  * composable. That alpha is why the version catalog overrides the Compose BOM
  * for material3 alone, and why this lives on its own branch.
  *
  * Selected tab shows its label, the others are icon only. Four labels do not fit
  * a pill at any readable size, and a pill of four unlabelled icons is a guessing
- * game, so the label follows the selection. That also gives the thing something
- * to animate, which is most of why the shape is worth having.
+ * game, so the label follows the selection.
+ *
+ * **Colours are deliberately not the Material defaults.** On a near-black theme
+ * (`background` is 0xFF0B0E11) the stock checked `ToggleButton` fills with solid
+ * `primary`, and this app's primary is a bright cyan. One glowing lozenge then
+ * outshines the entire screen. The selected tab instead gets a low-alpha cyan
+ * wash with cyan content: still unmistakably the selected one, without becoming
+ * the brightest thing in the app.
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun FloatingNavPill(
     isSelected: (Tab) -> Boolean,
     onSelect: (Tab) -> Unit,
+    onAdd: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
-    HorizontalFloatingToolbar(
-        // Always expanded: this is navigation, not a contextual toolbar, and it
-        // must not collapse itself out from under a scrolling list.
-        expanded = true,
-        colors = FloatingToolbarDefaults.vibrantFloatingToolbarColors(),
-        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 6.dp),
+    val scheme = MaterialTheme.colorScheme
+    val itemColors = ToggleButtonDefaults.toggleButtonColors(
+        containerColor = Color.Transparent,
+        contentColor = scheme.onSurfaceVariant,
+        // A wash rather than a fill. Cyan at full strength on this background
+        // reads as a headlight, not as a selection.
+        checkedContainerColor = scheme.primary.copy(alpha = 0.16f),
+        checkedContentColor = scheme.primary,
+    )
+
+    Row(
         modifier = modifier
             // The overlay sits outside any inset-aware slot, so the gesture bar
             // is this composable's own problem.
             .windowInsetsPadding(WindowInsets.navigationBars)
             .padding(bottom = FloatingToolbarDefaults.ScreenOffset),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        tabs.forEach { tab ->
-            val selected = isSelected(tab)
-            ToggleButton(
-                checked = selected,
-                onCheckedChange = { if (!selected) onSelect(tab) },
-                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
-            ) {
-                Icon(tab.icon, contentDescription = tab.label, modifier = Modifier.size(20.dp))
-                AnimatedVisibility(visible = selected) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Spacer(Modifier.size(8.dp))
-                        Text(tab.label, style = MaterialTheme.typography.labelLarge, maxLines = 1)
+        HorizontalFloatingToolbar(
+            // Always expanded: this is navigation, not a contextual toolbar, and
+            // it must not collapse itself out from under a scrolling list.
+            expanded = true,
+            colors = FloatingToolbarDefaults.standardFloatingToolbarColors(),
+            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
+        ) {
+            tabs.forEachIndexed { index, tab ->
+                if (index > 0) Spacer(Modifier.size(6.dp))
+                val selected = isSelected(tab)
+                ToggleButton(
+                    checked = selected,
+                    onCheckedChange = { if (!selected) onSelect(tab) },
+                    colors = itemColors,
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+                ) {
+                    Icon(tab.icon, contentDescription = tab.label, modifier = Modifier.size(20.dp))
+                    AnimatedVisibility(visible = selected) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Spacer(Modifier.size(8.dp))
+                            Text(tab.label, style = MaterialTheme.typography.labelLarge, maxLines = 1)
+                        }
                     }
                 }
+            }
+        }
+
+        // Sized to the toolbar rather than left at the default 56.dp, so the two
+        // read as one row of equal height rather than as two stray objects.
+        //
+        // It appears only on the portfolio tab, which does mean the pill shifts
+        // sideways when you leave that tab. Keeping the pair centred was the
+        // explicit ask; reserving the space on every tab is the alternative if
+        // that movement turns out to be annoying.
+        if (onAdd != null) {
+            FloatingToolbarDefaults.StandardFloatingActionButton(
+                onClick = onAdd,
+                modifier = Modifier.size(FloatingToolbarDefaults.ContainerSize),
+            ) {
+                Icon(Icons.Default.Add, contentDescription = "Add a position")
             }
         }
     }
