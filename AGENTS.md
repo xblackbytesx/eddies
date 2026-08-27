@@ -9,6 +9,19 @@ Name: **Eddies** presentationally, `eddies` everywhere technical. It is Cyberpun
 2077's slang for eurodollars, which fits: EUR and USD are the two currencies that
 ship first.
 
+**Licensed GPLv3.** Chosen over a permissive licence deliberately. The reason to
+run this app is that it keeps holdings on the device and sends nothing anywhere,
+and under MIT the cheapest possible fork is "Eddies, with analytics", which
+quietly removes the only property that makes it worth having. Copyleft does not
+prevent that, but it forces the fork to show its source. Every dependency is
+Apache-2.0 and the bundled icons are MIT and CC0, all GPLv3-compatible, so
+nothing in the tree constrains that choice.
+
+This is the only agent instruction file, on purpose. It is tool-agnostic and
+reads as documentation, so it serves a human contributor equally well and pushes
+no particular assistant on anyone. Do not add a vendor-specific file alongside
+it. Put the content here instead.
+
 ## Build and verify: Docker only
 
 There is no Android toolchain on the host in normal use. Build and test through
@@ -63,6 +76,31 @@ load-bearing: `actions/upload-artifact` must be `@v4` (v3 was shut down in
 January 2025 and hard-fails), the release job needs an explicit
 `permissions: contents: write`, and releases are published with `gh release
 create` rather than the Gitea API curl dance.
+
+### Building without Docker
+
+The supported path is `make`. If you cannot run the container, a local toolchain
+works provided it matches `docker/Dockerfile`: Temurin JDK 21, Gradle 8.13,
+cmdline-tools 11076708, `android-36`, build-tools 36.0.0. Matching those is what
+makes a green local run predict a green `make test`.
+
+Always pass `--project-cache-dir` pointing outside the repo:
+
+```
+echo "sdk.dir=$SDK" > local.properties
+JAVA_HOME=$JDK ANDROID_HOME=$SDK GRADLE_USER_HOME=$GRADLE_HOME \
+  gradle --no-daemon --project-cache-dir=$CACHE :app:testFullDebugUnitTest
+```
+
+**Clean up before going back to `make`.** Without `--project-cache-dir`, Gradle
+writes `./.gradle/`, whose `fileHashes.lock` records a host PID the build
+container cannot see, and the next `make build` dies with *"Timeout waiting to
+lock file hash cache"*. `local.properties` is just as poisonous: its `sdk.dir`
+overrides the container's `ANDROID_HOME`.
+
+```
+rm -rf .gradle app/.gradle build app/build .kotlin build-output local.properties
+```
 
 ## Demo mode is a flavour, not a setting
 
@@ -134,7 +172,13 @@ data.
 
 These are properties of the services, verified live on 2026-08-25, not choices we
 are free to revisit. All of them are public and keyless, so re-verify with `curl`
-rather than trusting this file.
+rather than trusting this file. Do that before changing anything in
+`data/price/`: these endpoints answer in seconds, and every trap below was found
+by checking rather than by reasoning.
+
+Kraken's WebSocket v2 in particular contradicts its own REST metadata and fails
+silently. To hold a socket open without installing anything, a single-file
+`java WsProbe.java` is enough.
 
 ### Kraken WebSocket v2 uses market symbols, and its own REST metadata lies
 
@@ -407,6 +451,33 @@ verified on a device.
 - **Never install the Ktor `Logging` plugin.** The request URLs carry the exact
   list of coins the user holds, which is the one thing this app exists to keep
   private.
+
+### House style
+
+No em dashes anywhere, including code comments. A period, comma, colon or
+parentheses will do.
+
+Comments earn their place by explaining why, not what. The bar used throughout
+this repo: if removing the comment would let someone reintroduce the bug it
+prevents, keep it. Otherwise cut it.
+
+### Edit files with an editor, not with a stream
+
+Scripted find-and-replace has caused three separate defects here, each leaving a
+file that was syntactically fine and semantically wrong:
+
+- `perl -0pi -e` with shell escaping ate the single quotes from `'CRYPTO'` in a
+  migration. It compiled, because migration SQL is a string, and crashed every
+  upgrading install on launch. It has also eaten a `$variable` inside a
+  double-quoted heredoc and a `@launch` label off a `return`.
+- `cat >> file` appended a compose service after the `volumes:` key, so every
+  `make` target broke with "additional properties not allowed".
+- Computing an insertion line with `$(grep -n ...)` produced an empty number when
+  the pattern did not match, and `head -n $((LINE-1))` then quietly truncated the
+  file instead of failing.
+
+If a scripted edit is genuinely the right tool, splice through a temp file and
+read the result back, rather than appending and hoping.
 
 ## Settings is a hub, and every preference has exactly one home
 
@@ -838,7 +909,7 @@ cut that to roughly 1.1 MB. Re-run on a machine with `cwebp` installed.
 **Present a short plan before starting 10.** Milestones get agreed before they
 get built, not after.
 
-## Verified in the sandbox, 2026-08-26
+## Verified without a device, 2026-08-26
 
 `:app:testFullDebugUnitTest` (189 tests) passes, along with `lintFullDebug`
 (0 errors), `assembleFullDebug`, `assembleDemoDebug` and `assembleFullRelease`.
@@ -857,10 +928,15 @@ Every market-data contract above was checked against the live endpoints: Kraken
 (including holding a real WebSocket open), Binance, CoinPaprika, Frankfurter,
 Koios, Yahoo and Tradegate.
 
-What is NOT verified here, by construction: there is no phone, so nothing about
-SQLCipher opening a database, the biometric prompt, socket behaviour under real
-backgrounding, or how the charts feel has been observed. That is the user's to
-run.
+What is NOT verified here, by construction. Without a phone, nothing about
+SQLCipher actually opening a database, the biometric prompt, socket behaviour
+under real backgrounding, or how the charts feel has been observed. Those need
+an install.
+
+**Do not diagnose device-only behaviour from the code alone.** State the
+hypothesis, name the line of logcat that would confirm or kill it, and get that
+first. A large change built on an unverified premise costs a build, an install
+and a good deal of trust.
 
 ## The floating navigation pill (branch: `floating-nav-pill`)
 

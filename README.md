@@ -91,6 +91,12 @@ invariants and the things that look wrong until you know why.
 
 GPLv3. See [LICENSE](LICENSE).
 
+In short: use it, study it, change it, share it. If you distribute a modified
+version you have to publish your changes under the same licence. That is the
+point. The reason to run Eddies is that it holds your holdings and sends nothing
+anywhere, and a licence that let someone ship a closed fork with analytics
+bolted on would quietly undo the only thing it is for.
+
 Bundled coin icons come from
 [ErikThiart/cryptocurrency-icons](https://github.com/ErikThiart/cryptocurrency-icons)
 (MIT) and [spothq/cryptocurrency-icons](https://github.com/spothq/cryptocurrency-icons)

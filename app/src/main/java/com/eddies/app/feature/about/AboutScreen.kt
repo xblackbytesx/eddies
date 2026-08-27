@@ -56,16 +56,30 @@ private const val PRIVACY = """Eddies has no account and no server of its own. Y
 
 There is no analytics, no crash reporting and no advertising. The app declares one permission: internet access.
 
-It talks to exactly three kinds of service, and only about prices:
-  - an exchange (Kraken or Binance) for live prices
-  - CoinPaprika or CoinGecko for coins the exchange does not list
+It talks to a handful of services, and only about prices:
+  - an exchange (Kraken or Binance) for live crypto prices
+  - CoinPaprika, or CoinGecko with your own key, for coins the exchange does not list
+  - Yahoo Finance, or Finnhub with your own key, for shares and ETFs
+  - Tradegate, for instruments held there
+  - Koios, if you add a Cardano stake address
   - Frankfurter, for European Central Bank currency rates
 
-Those requests name the coins you are pricing. That is unavoidable for a price, but it is why coin icons ship inside the app rather than being fetched, and why searching is offline unless you turn remote lookup on.
+Those requests name the instruments you are pricing. That is unavoidable for a price, but it is why coin icons ship inside the app rather than being fetched, and why searching is offline unless you turn remote lookup on.
 
 Backups are encrypted with a passphrase you choose, and are written wherever you point them. Nothing is uploaded."""
 
-private const val LICENCES = """Cryptocurrency icons
+// GPLv3 section 5 wants a distributed work to carry its own notice, so Eddies
+// states its own licence here rather than only in the repository.
+//
+// Add the canonical source URL to this block before publishing binaries.
+// Section 6 wants anyone holding the APK to be able to find the source, and the
+// release page is the natural thing to point at.
+private const val LICENCES = """Eddies
+  GNU General Public License v3.0 or later
+  This is free software: you may change it and redistribute it.
+  There is NO WARRANTY, to the extent permitted by law.
+
+Cryptocurrency icons
   ErikThiart/cryptocurrency-icons, MIT
   spothq/cryptocurrency-icons, CC0-1.0
 
