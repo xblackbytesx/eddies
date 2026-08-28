@@ -84,8 +84,14 @@ keystore:
 	@echo "Now, before anything else:"
 	@echo "  1. Attach $(KEYSTORE_FILE) to your password manager."
 	@echo "  2. Paste the base64 above into RELEASE_KEYSTORE_BASE64."
-	@echo "  3. Add RELEASE_KEYSTORE_PASSWORD, RELEASE_KEY_ALIAS ($(KEYSTORE_ALIAS)),"
-	@echo "     and RELEASE_KEY_PASSWORD."
+	@echo "  3. Add RELEASE_KEYSTORE_PASSWORD (the password you just typed),"
+	@echo "     RELEASE_KEY_ALIAS ($(KEYSTORE_ALIAS)), and RELEASE_KEY_PASSWORD."
+	@echo
+	@echo "     RELEASE_KEY_PASSWORD is the SAME password. PKCS12 does not support"
+	@echo "     a separate key password, which is why keytool only asked once."
+	@echo "     Leave it unset and the build silently produces unsigned APKs"
+	@echo "     instead of failing, because Gradle only wires up signing when all"
+	@echo "     four values are present."
 	@echo "  4. Then delete $(KEYSTORE_FILE) from here. It is gitignored, so it will"
 	@echo "     not be committed, but it should not sit in a working tree either."
 	@echo
