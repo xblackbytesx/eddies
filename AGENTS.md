@@ -77,6 +77,20 @@ January 2025 and hard-fails), the release job needs an explicit
 `permissions: contents: write`, and releases are published with `gh release
 create` rather than the Gitea API curl dance.
 
+### material3 is pinned to an alpha, and cannot move further
+
+The version catalog overrides the Compose BOM for material3 alone, at
+`1.5.0-alpha18`. `HorizontalFloatingToolbar` is not in 1.4.0 stable, which ships
+only its design tokens, and there is no stable 1.5.0.
+
+**alpha19 and later cannot be taken** without a toolchain upgrade: they raise
+`minCompileSdk` to 37 and `minAndroidGradlePluginVersion` to 9.1.0, the same wall
+that keeps sqlcipher at 4.9.0. Check `aar-metadata.properties` in the AAR before
+bumping, rather than upgrading and reading the error.
+
+The alpha pulls compose foundation and ui up to `1.11.0-beta02` transitively, so
+the app runs on a beta Compose runtime. That is the live cost of this component.
+
 ### Building without Docker
 
 The supported path is `make`. If you cannot run the container, a local toolchain
@@ -452,6 +466,17 @@ verified on a device.
   list of coins the user holds, which is the one thing this app exists to keep
   private.
 
+### When a setting earns its place
+
+A genuine disagreement about behaviour earns a setting. Differing taste in chrome
+does not.
+
+Auto-hiding the navigation clears that bar: some people want the screen space,
+others want their tabs where they left them, and both are right. It is a setting,
+off by default. A full-bar-versus-pill toggle does not clear it, and would mean
+maintaining two navigation layouts forever, each with its own padding contract,
+so that nobody has to adapt to a bar for a day.
+
 ### House style
 
 No em dashes anywhere, including code comments. A period, comma, colon or
@@ -640,6 +665,21 @@ anything is withdrawn and would double count against a withdrawal entered by
 hand. They carry no cost basis and are valued at today's price, so they read
 wholly as gain, which is correct: they were never paid for.
 
+**Dividends and staking rewards are one idea.** Both are earned rather than
+bought, so `Holding.incomeValue` sums them and the combined view presents
+"earned" once. A dividend carries `cashAmount` and moves neither quantity nor
+basis, which is why it needed its own accumulator rather than being folded into
+an existing one.
+
+**History is fetched lazily, and the backfill is the exception.** Opening an
+asset fetches that asset and nothing else; the several hundred in the seed are
+never prefetched, and one in-flight request per (asset, interval) stops the chart
+and the backfill duplicating work. The portfolio backfill has to cover every held
+asset, because a total assembled from only the ones somebody happened to open is
+quietly missing the rest. Days before an asset's history begins are valued at
+zero rather than carrying the oldest known price backwards, which would draw a
+flat line that never happened.
+
 **Custody lives in its own table, and must.** `asset_custody` records where a
 coin is actually kept. It is deliberately not columns on `AssetEntity`, because
 those rows are re-upserted wholesale whenever the bundled seed version changes
@@ -673,6 +713,42 @@ opens no socket at all.
 **No key ships in the APK, and one permission is declared.** `INTERNET`, plus
 network state and biometric. No storage permission: backups go through the
 Storage Access Framework.
+
+### The navigation pill
+
+Bottom navigation is a `HorizontalFloatingToolbar` overlaying the content, not a
+`bottomBar` reserving a strip of it. Four things about that will bite again:
+
+**The overlay Box must be `fillMaxSize`.** A Box wraps its content, so
+`Alignment.BottomCenter` means the bottom of whatever is measured right now. A
+screen that renders nothing for a moment (`LoadingPlaceholder` holds back 400ms
+so a populated database never flashes an empty state) collapses the Box, and the
+pill draws near the top of a black screen before snapping back. It looks like a
+broken transition and it is a layout bug.
+
+**Every tab screen ends with 96.dp of bottom padding**, and that is now
+load-bearing rather than incidental. A new tab screen without it puts its last
+row under the pill.
+
+**The pill consumes touches on `PointerEventPass.Main`.** A tap in its padding or
+between two items hits no input node inside it, so the hit test carries on to the
+NavHost underneath and opens whatever card is scrolled beneath. `Main` travels
+child to parent, so the buttons get first refusal and the container mops up the
+rest; consuming on `Initial` would eat the taps before any button saw them.
+
+**Anything decorating the pill from outside sits below its scroll offset.**
+`floatingScrollBehavior` is applied by hand rather than passed as the component's
+`scrollBehavior`, because the component applies the offset inside its own layout.
+The border and the touch handling go under it, otherwise the pill slides away on
+scroll and its rim stays behind drawing an empty outline.
+
+**It is edged, not shadowed.** List rows and the stock toolbar both land on
+`surfaceContainer`, so cards merged into it. The container moves to
+`surfaceContainerHigh` and takes a 1.dp `outlineVariant` rim. A drop shadow
+cannot work here: Android shadows darken what is behind them, and darkening
+0xFF0B0E11 produces nothing, so every "raise the elevation" answer is invisible
+on OLED. The selected tab is a 16% `primary` wash rather than the stock solid
+fill, which on this theme read as a headlight.
 
 ## Gotchas learned the hard way
 
@@ -719,13 +795,10 @@ Storage Access Framework.
 
 ### Expected lint noise
 
-On the `floating-nav-pill` branch it is 39, the extra one being
-`GradleDependency` saying material3 alpha27 is newer than the alpha18 pinned
-there. That pin is deliberate; see the version catalog comment.
-
-`make lint` reports 0 errors and 38 warnings, all of them known. 37 are
+`make lint` reports 0 errors and 39 warnings, all of them known. 38 are
 `GradleDependency` / `NewerVersionAvailable` / `AndroidGradlePluginVersion`
-pointing at the AGP 9 upgrade declined above. The last is `ObsoleteSdkInt` on
+pointing at the AGP 9 upgrade declined above, one of which is material3 saying a
+newer alpha exists. The last is `ObsoleteSdkInt` on
 `res/mipmap-anydpi-v26`: lint suggests merging it into `mipmap-anydpi` since
 minSdk is 35, but AAPT does not index that folder and the build fails with
 *"resource mipmap/ic_launcher not found"*. The `-v26` qualifier stays.
@@ -781,133 +854,51 @@ cut that to roughly 1.1 MB. Re-run on a machine with `cwebp` installed.
 
 ## Milestones
 
-1. **Done.** Scaffold, container, GitHub CI, docs. Ledger schema and cost basis
-   engine. Kraken and Binance sockets, aggregator fallback, FX. Portfolio,
-   Insights, Markets, Settings, asset detail, add/edit transaction. Encrypted
-   backup, CSV import and export. App lock. Dark by default. Advanced trader mode.
+Shipped, in order. The reasoning behind each lives in Invariants above rather
+than being restated here; this is a map, not a changelog. `git log` is the
+changelog.
 
-2. **Done. Price history.** `HistorySource` with Kraken, Binance and CoinPaprika
-   implementations, all keyless. Range-selectable price chart on asset detail
-   (1D hourly, everything else daily), portfolio backfill, watchlist.
+1. Scaffold, container, CI. Ledger schema and cost basis engine, Kraken and
+   Binance sockets with an aggregator fallback, FX, the five screens, encrypted
+   backup, CSV import and export, app lock, advanced trader mode.
+2. **Price history.** `HistorySource` over Kraken, Binance and CoinPaprika, all
+   keyless. Range-selectable asset chart, portfolio backfill, watchlist.
+3. **Stored at.** `asset_custody` and `CustodyGrouper`. A closed set of kinds for
+   the icon, free text for the name, previous names offered as chips.
+4. **Staking.** `StakingProvider`, `CardanoKoiosProvider` first. A stake address
+   produces a live outstanding figure that adds to the holding.
+5. **Stocks, and the combined view.** `AssetClass.STOCK`, Yahoo by default with
+   an optional Finnhub key. No core table changed, which was the point of
+   prefixing asset ids by class. `PortfolioScope` filters to All, Crypto or
+   Stocks, and the parts derive from the same holdings as the whole, so a
+   per-class total can never disagree with the grand total.
+6. **Tradegate.** A German venue Yahoo does not carry, keyed by ISIN. Live prices
+   from Tradegate, history and splits from the Yahoo listing through
+   `asset_source_refs`. ISINs are check-digit validated locally, so a typo is
+   caught before a request goes out and the message can say "typo" rather than
+   "not found".
+7. **Demo flavour.** A separate installable app with a fabricated portfolio.
+8. **Loose ends.** The second currency now displays, the ledger has a screen of
+   its own, and `onboarded` separates "never started" from "sold everything".
+9. **One instrument, one holding.** Tradegate reuses the listing id, and a merge
+   screen repairs ledgers written before that.
+10. **Navigation pill.** The bottom bar became a floating toolbar, with an
+    optional auto-hide.
 
-   **Fetching is lazy and cached.** Opening a coin fetches that coin and nothing
-   else; the several hundred in the seed are never prefetched. A refresh sends
-   the newest cached timestamp as a delta hint, which against Kraken is about
-   640 bytes instead of the 61 KB a full pull costs. One in-flight request per
-   (asset, interval) stops the chart and the backfill duplicating work.
+**Parked.** Dividend reinvestment (DRIP), where a dividend buys shares rather
+than paying cash. It needs per-position settings and reconciliation against what
+the broker actually did, and the ledger already represents it as a DIVIDEND plus
+a BUY for anyone who wants it today.
 
-   **The backfill is the exception, and has to be.** A portfolio total is a sum
-   across every held asset, so history for only the coins someone happened to
-   open would produce a number that is quietly missing the rest. It covers held
-   assets only, typically a handful, and shares the same cache.
+Also parked, in rough order of value: a home screen widget (glanceable net worth
+is the highest-frequency interaction a tracker has), a broker-aware CSV import
+that recognises DEGIRO, Trade Republic, Kraken and Bitvavo exports by their
+header row rather than making the user map columns, and a per-year 1 January
+valuation, which several European wealth-tax regimes ask for and the daily
+snapshots can already answer exactly.
 
-   Days before an asset's history begins value it at zero rather than carrying
-   the oldest known price backwards, which would draw a flat line that never
-   happened.
-
-3. **Done. Stored at.** `asset_custody` plus `CustodyGrouper`. A per-asset
-   location with a closed set of kinds (hardware wallet, exchange, software
-   wallet, cold storage, DeFi, other) for the icon and the grouping, and a free
-   text name because no curated exchange list would ever match a real setup.
-   Names already used appear as chips, which is what stops the set fragmenting
-   into "Kraken", "kraken" and "Kraken exchange". Editable from asset detail,
-   summarised in Insights under "Where it is kept", and carried in the encrypted
-   backup, because the moment you most need to know which wallet holds your BTC
-   is while setting the app up on a new phone.
-
-4. **Done. Staking.** `StakingProvider` with `CardanoKoiosProvider` first, plus
-   `staking_balances`. A stake address on an account produces a live outstanding
-   figure that adds to the holding and to the portfolio total.
-
-   **Modelled as a balance, not as ledger rows.** Rewards accrue continuously and
-   are withdrawn in lumps, so a transaction per epoch would be hundreds of rows
-   that go stale the moment anything is withdrawn, and would double count against
-   a withdrawal entered by hand. `rewards_available` is earned minus withdrawn,
-   which is precisely the amount that is still outstanding.
-
-   **Valued at today's price, never historically.** The question is "how much of
-   my ADA did I earn", not "what was my income in 2021". That also sidesteps the
-   fact that price history reaches back about two years while Cardano staking
-   goes back to 2020.
-
-   Rewards therefore carry no cost basis, so they show up wholly as gain, which
-   is correct: they were never paid for. `PortfolioBuilder` keys off the union of
-   ledger assets and staked assets, because a coin held only as accrued rewards
-   is still a real position and keying off the ledger alone would hide it.
-
-   A failed sync keeps the last known figure and stores the reason, so the UI can
-   say when it was last checked instead of showing a stale number as current.
-
-5. **Done. Stocks, and the combined view.** `AssetClass.STOCK` with Yahoo as the
-   keyless default and an optional Finnhub key. The core tables did not change,
-   which was the point of prefixing asset ids by class: shares slot into the same
-   ledger, the same price pipeline, the same custody table and the same backup.
-
-   **Splits are replayed, never written back.** A 4:1 split multiplies the share
-   count and divides the unit cost, leaving total basis untouched. They are
-   interleaved with transactions chronologically rather than applied at the end,
-   because a sale entered before a split is denominated in pre-split shares and
-   applying the ratio afterwards would leave the wrong number on both sides.
-   Rewriting the ledger instead would destroy what the user typed and would be
-   unrecoverable if the provider later corrected the ratio.
-
-   **Dividends are the stock-side twin of staking rewards.** Both are earned
-   rather than bought, so `Holding.incomeValue` adds them into one figure and the
-   combined view presents "earned" once instead of making the user hold two ideas.
-   A dividend carries `cashAmount` and moves neither quantity nor basis, which is
-   why it needed its own accumulator rather than being squeezed into an existing
-   one.
-
-   Class routing runs through the price pipeline: a crypto exchange has never
-   heard of AAPL and Yahoo has no opinion on the long tail of tokens, so each
-   class goes to its own ladder. `PortfolioScope` filters the portfolio to All,
-   Crypto or Stocks, and per-class snapshots make each chartable. The parts are
-   derived from the same holdings as the whole, so a per-class total and the
-   grand total can never disagree.
-
-6. **Done. Tradegate.** A German venue Yahoo does not carry, added as its own
-   price source keyed by ISIN. Live prices from Tradegate, history and splits
-   from the same instrument's Yahoo listing via `asset_source_refs`. ISINs are
-   check-digit validated locally so a typo is caught before a request goes out
-   and the message can say "typo" rather than "not found".
-
-7. **Done. Demo flavour.** A separate installable app with a fabricated
-   portfolio, for store and release screenshots, sharing all app code. Isolation
-   is structural rather than conditional: see the section above for why a
-   runtime toggle was rejected.
-
-8. **Done. Loose ends.** Three things the app half-promised. The secondary
-   currency setting was stored, backed up and settable but never displayed
-   anywhere; it now sits under the portfolio total, and only when one is set and
-   differs from the main one. Transactions were reachable only per asset, so the
-   ledger as a whole could not be read; there is now an all-transactions screen,
-   which is also the only place a fully sold position is visible, since it leaves
-   the portfolio but its realised profit stays in the totals. And `onboarded` was
-   written and read but nothing ever branched on it; it now separates "never
-   started" from "sold everything", which want different empty states.
-
-9. **Done. One instrument, one holding.** The same ETF added through the
-   Tradegate tab and through the stock search was two holdings. Fixed at the
-   root, so it cannot happen again, plus a merge screen to repair ledgers already
-   written that way, plus `verify-merge.sh` to prove the merge does not lose
-   anything. Asset detail also grew an "+ Add" button on its transactions
-   section: adding a second purchase of something already held meant searching
-   for it again from scratch.
-
-10. **Parked.** Dividend reinvestment (DRIP), where a dividend buys shares rather
-   than paying cash. It needs per-position reinvestment settings and
-   reconciliation against what the broker actually did, and the ledger already
-   represents it as a DIVIDEND plus a BUY for anyone who wants it today.
-
-   Also parked, in rough order of value if picked up: a home screen widget
-   (glanceable net worth, the highest-frequency interaction a tracker has), a
-   broker-aware CSV import that recognises DEGIRO, Trade Republic, Kraken and
-   Bitvavo exports by their header row rather than making the user map columns,
-   and a per-year 1 January valuation, which several European wealth-tax regimes
-   ask for and which the daily snapshots can already answer exactly.
-
-**Present a short plan before starting 10.** Milestones get agreed before they
-get built, not after.
+**Present a short plan before starting the next one.** Milestones get agreed
+before they get built, not after.
 
 ## Verified without a device, 2026-08-26
 
@@ -937,118 +928,3 @@ an install.
 hypothesis, name the line of logcat that would confirm or kill it, and get that
 first. A large change built on an unverified premise costs a build, an install
 and a good deal of trust.
-
-## The floating navigation pill (branch: `floating-nav-pill`)
-
-An experiment, deliberately isolated from master. The bottom `NavigationBar` is
-replaced by `HorizontalFloatingToolbar`: a rounded pill that hovers over the
-content instead of reserving a strip of it, with the selected tab showing its
-label and the rest icon only.
-
-**Why it needs an alpha.** `HorizontalFloatingToolbar` is a real Material 3
-component but is not in material3 1.4.0 stable, which ships only
-`FloatingToolbarTokens`. There is no stable 1.5.0. So the version catalog
-overrides the Compose BOM for material3 alone.
-
-**Why alpha18 and not the newest.** alpha19 raises `minCompileSdk` to 37 and
-`minAndroidGradlePluginVersion` to 9.1.0. That is the identical wall that keeps
-sqlcipher at 4.9.0, and taking it would drag AGP, the Docker image and CI along.
-alpha18 is the last one that asks for compileSdk 35 and AGP 8.6.0, both of which
-this project already exceeds. Found by probing each alpha's
-`aar-metadata.properties` rather than by upgrading and seeing what broke.
-
-It still pulls compose foundation and ui from 1.9.3 up to 1.11.0-beta02,
-transitively, because the alpha requires it. Everything builds and all tests
-pass, but that is a beta Compose runtime under the whole app, which is the real
-reason this is a branch and not a commit on master.
-
-**No bottomBar and no Scaffold FAB slot any more.** The pill is an overlay inside
-the Scaffold content, aligned bottom-centre, applying
-`WindowInsets.navigationBars` itself since it sits outside any inset-aware slot.
-This works only because every tab screen already ends with 96.dp of bottom
-padding, which is now load-bearing: a new tab screen that forgets it will have
-its last row sitting under the pill.
-
-**That overlay Box must be `fillMaxSize`.** A Box wraps its content, so
-`Alignment.BottomCenter` means the bottom of whatever is currently measured. On a
-cold navigation the incoming screen deliberately renders nothing for 400ms
-(`LoadingPlaceholder`, so a populated database never flashes an empty state), the
-Box collapses to roughly the pill's own height, and the pill draws near the top
-of a black screen before being shoved back into place once content arrives. It
-looks like a broken transition and it is a layout bug. The Scaffold used to own
-that positioning through `bottomBar`; taking the pill out of that slot made it
-the Box's job.
-
-**The add button is a top bar action, not a FAB.** A tracker is read-mostly:
-positions are added occasionally and looked at daily, so a permanently docked
-button claimed more of the screen than the action earns, and it left two floating
-objects competing at the bottom edge. It now sits beside the transactions icon on
-the portfolio screen. Discovery is unaffected: the empty state still leads with a
-full-width button, which is the only moment it matters.
-
-Removing it also fixed a second problem. Pairing the FAB with the pill meant the
-whole pill slid sideways whenever you left the portfolio tab, moving the target
-out from under the finger that had just tapped it. With nothing else at the
-bottom, the pill is centred once and stays there.
-
-**The colours are deliberately not the Material defaults.** The stock checked
-`ToggleButton` fills with solid `primary`, and this app's primary is a bright
-cyan on a near-black background, so one glowing lozenge outshone the whole
-screen. The selected tab now gets a 16% cyan wash with cyan content, and the
-toolbar uses `standardFloatingToolbarColors` rather than the vibrant set.
-
-**The pill is edged, not shadowed.** List rows and the stock toolbar both land
-on `surfaceContainer`, so a card scrolling behind the pill merged into it. The
-container moves one step to `surfaceContainerHigh` and the pill takes a 1.dp
-`outlineVariant` rim.
-
-The rim is there because **a drop shadow cannot work on this theme**. Android
-shadows darken what is behind them, and darkening a 0xFF0B0E11 background
-produces nothing. Every "raise the elevation" answer to a separation problem is
-invisible on OLED, which is why well-made dark interfaces edge their floating
-surfaces instead. `outlineVariant` rather than a white alpha because it is a mid
-tone in both schemes, so one line lifts the edge in the dark theme and settles
-it in the light one.
-
-**Not verified here:** how any of it actually looks, and in particular whether
-the 1.dp rim reads as crisp or as a drawn-on outline. That needs the phone, and
-the rim is the one choice here most likely to want a nudge, either in weight or
-in how far the container tone is lifted.
-
-**The pill swallows every touch that lands on it.** A tap in its padding, or in a
-gap between two items, hits no pointer input node inside the pill, so the hit
-test carries on to the NavHost sibling underneath and opens whichever card is
-scrolled beneath the bar. The finger was in the right place; the dead zone was.
-It reads as a mistap on the navigation and it is one, just not the user's.
-
-The fix is a `pointerInput` on the toolbar consuming on `PointerEventPass.Main`.
-The pass matters: `Initial` travels parent to child and would eat taps before any
-`ToggleButton` saw them; `Main` travels child to parent, so the buttons get first
-refusal and the container only mops up what they left. A full-width `bottomBar`
-never had this problem because nothing was behind it.
-
-**Auto-hide on scroll is a setting, off by default.** Settings > General >
-Appearance > "Hide navigation when scrolling", stored as `hideNavOnScroll` and
-carried in backups with a default so older backup files still restore.
-
-It uses Material's own `FloatingToolbarDefaults.exitAlwaysScrollBehavior`, not
-anything hand-rolled. The behaviour *is* a `NestedScrollConnection`, so it is
-attached with `Modifier.nestedScroll` on the Box wrapping the NavHost rather than
-per screen: nested scroll propagates upward, so one ancestor covers every list.
-
-**The offset is placed by hand, not passed to the toolbar.** Handing the
-component its `scrollBehavior` parameter applies the offset inside its own
-layout, which is inside everything in the modifier chain: the container slid
-away on scroll and the border stayed put, drawing an empty outline where the
-pill had been. `FloatingToolbarScrollBehavior.floatingScrollBehavior` is public
-for exactly this. It goes above the border and the touch handling so both travel
-with the pill. Anything else decorating the pill from the outside has to sit
-below it too.
-
-Off by default on purpose. Hiding an app bar is uncontroversial; hiding the only
-way to change tabs is not, and the two positions are both reasonable. That is the
-line for adding a setting at all in this app: a genuine disagreement about
-behaviour earns one, differing taste in chrome does not. The same reasoning is
-why there is no full-bar-versus-pill toggle. Two navigation layouts would have to
-be maintained forever, each with its own padding contract, so that nobody has to
-adapt to a bar in a day.
