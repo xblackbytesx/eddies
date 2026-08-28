@@ -2,7 +2,7 @@
 COMPOSE := docker compose -f docker/docker-compose.yml
 
 .DEFAULT_GOAL := help
-.PHONY: help build app debug demo release test lint shell clean
+.PHONY: help build app debug demo release test lint shell clean keystore
 
 ## Lists the targets. Bare `make` lands here rather than guessing.
 help:
@@ -15,6 +15,7 @@ help:
 	@echo "  make lint"
 	@echo "  make shell     interactive container for one-off gradle tasks"
 	@echo "  make clean     remove build dirs and build-output"
+	@echo "  make keystore  generate a release signing key, print it for CI"
 	@echo
 	@echo "Every build prints the APKs it produced, with timestamps. Check them."
 
@@ -50,6 +51,47 @@ lint:
 ## Interactive container for one-off gradle tasks
 shell:
 	$(COMPOSE) run --rm shell
+
+## Generates a release signing key and prints it base64 encoded, for CI
+#
+# There is no seed and no way to regenerate this. keytool draws the RSA key from
+# the system CSPRNG, so the keystore *is* the secret. Lose it and you can never
+# ship an update anyone can install over an existing one: Android matches by
+# signature and there is no recovery path.
+#
+# So the output is printed rather than left lying around, and the file is
+# removed on the way out. Put the base64 into the RELEASE_KEYSTORE_BASE64
+# repository secret, and put the keystore itself somewhere you would keep an SSH
+# key. GitHub secrets are write-only, so that second copy is the only way back.
+#
+# Runs in the same JDK image the build uses, so keytool is not a host
+# requirement. PKCS12 explicitly: it is keytool's default now, and asking for it
+# avoids both the migration warning and the proprietary JKS format.
+KEYSTORE_ALIAS ?= eddies
+KEYSTORE_FILE  ?= release.jks
+keystore:
+	@test ! -f "$(KEYSTORE_FILE)" || \
+		{ echo "$(KEYSTORE_FILE) already exists. Move it aside first." >&2; exit 1; }
+	$(COMPOSE) run --rm --entrypoint keytool build \
+		-genkeypair -v -keystore "/workspace/$(KEYSTORE_FILE)" \
+		-alias "$(KEYSTORE_ALIAS)" -keyalg RSA -keysize 4096 \
+		-validity 10000 -storetype PKCS12
+	@echo
+	@echo "=== RELEASE_KEYSTORE_BASE64, paste this into the repository secret ==="
+	@$(COMPOSE) run --rm -T --entrypoint base64 build -w 0 "/workspace/$(KEYSTORE_FILE)"
+	@echo
+	@echo
+	@echo "Now, before anything else:"
+	@echo "  1. Attach $(KEYSTORE_FILE) to your password manager."
+	@echo "  2. Paste the base64 above into RELEASE_KEYSTORE_BASE64."
+	@echo "  3. Add RELEASE_KEYSTORE_PASSWORD, RELEASE_KEY_ALIAS ($(KEYSTORE_ALIAS)),"
+	@echo "     and RELEASE_KEY_PASSWORD."
+	@echo "  4. Then delete $(KEYSTORE_FILE) from here. It is gitignored, so it will"
+	@echo "     not be committed, but it should not sit in a working tree either."
+	@echo
+	@echo "This target deliberately does not delete it for you. It cannot be"
+	@echo "regenerated, and GitHub will not let you read the secret back, so the"
+	@echo "copy in your password manager is the only way back from a lost key."
 
 ## Removes build output. Runs in the container, which is the point.
 #
