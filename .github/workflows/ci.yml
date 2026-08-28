@@ -20,6 +20,11 @@ jobs:
       BUILD_TOOLS_VERSION: "36.0.0"
       GRADLE_VERSION: "8.13"
       ANDROID_HOME: /opt/android-sdk
+      # The runner image exports ANDROID_SDK_ROOT pointing at its own preinstalled
+      # SDK. AGP reads both variables and hard-fails when they disagree, so this
+      # is pinned to the same path rather than left to the image. Deprecated in
+      # favour of ANDROID_HOME, but still read, so it cannot simply be ignored.
+      ANDROID_SDK_ROOT: /opt/android-sdk
 
     steps:
       - uses: actions/checkout@v4
