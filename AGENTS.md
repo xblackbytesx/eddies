@@ -59,11 +59,21 @@ Optional. With none of it configured the release builds unsigned rather than
 failing, which is deliberate: a fork should be able to build a release without
 inventing a keystore.
 
+`make keystore` generates a key in the build container, so keytool is not a host
+requirement, and prints it base64 encoded for CI.
+
 CI reads four repository secrets: `RELEASE_KEYSTORE_BASE64` (the keystore,
 base64 encoded), `RELEASE_KEYSTORE_PASSWORD`, `RELEASE_KEY_ALIAS` and
 `RELEASE_KEY_PASSWORD`. Locally a git-ignored `keystore.properties` at the repo
 root does the same job with `storeFile`, `storePassword`, `keyAlias` and
 `keyPassword`.
+
+**`RELEASE_KEY_PASSWORD` is the same value as `RELEASE_KEYSTORE_PASSWORD`.**
+The keystore is PKCS12, which does not support a separate key password, so
+keytool only ever asks once. Both must still be set: Gradle wires up the signing
+config only when all four values are non-blank, and with any of them missing the
+release **builds unsigned rather than failing**, which is not noticed until the
+release page shows `-unsigned.apk` files no phone will install.
 
 `keystore/debug.keystore` **is** committed, and that is fine: it is the standard
 Android debug key with the universally known `android` password. It is committed
