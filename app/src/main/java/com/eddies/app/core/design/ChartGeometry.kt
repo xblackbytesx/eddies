@@ -1,6 +1,5 @@
 package com.eddies.app.core.design
 
-import java.math.BigDecimal
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -15,7 +14,10 @@ enum class ChartRange(val label: String, val days: Int) {
     MONTH("1M", 30),
     QUARTER("3M", 90),
     YEAR("1Y", 365),
-    ALL("All", 3650),
+    ALL("All", 3650);
+
+    /** Ranges short enough that a point per day would be a handful of dots. */
+    val intraday: Boolean get() = this == DAY || this == WEEK
 }
 
 /**
@@ -65,13 +67,6 @@ object ChartMath {
         }
     }
 
-    /** Evenly spaced y-axis gridline values across the padded bounds. */
-    fun gridValues(min: Double, max: Double, lines: Int = 3): List<Double> {
-        val (lo, hi) = axisBounds(min, max)
-        if (lines <= 1) return listOf(lo)
-        return (0 until lines).map { lo + (hi - lo) * it / (lines - 1.0) }
-    }
-
     /**
      * Trims a series to a range and thins it to at most [maxPoints].
      *
@@ -109,10 +104,6 @@ object ChartMath {
 
     fun formatScrubTs(ts: Long, zone: ZoneId, range: ChartRange): String {
         val t = Instant.ofEpochMilli(ts).atZone(zone)
-        return if (range == ChartRange.DAY) fullFmt.format(t) else dayFmt.format(t)
+        return if (range.intraday) fullFmt.format(t) else dayFmt.format(t)
     }
-
-    /** Converts a BigDecimal series to chart points without precision drama: a chart pixel is a Double. */
-    fun toPoints(series: List<Pair<Long, BigDecimal>>): List<ChartPoint> =
-        series.map { (ts, v) -> ChartPoint(ts, v.toDouble()) }
 }

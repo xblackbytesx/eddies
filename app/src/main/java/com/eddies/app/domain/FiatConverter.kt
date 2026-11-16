@@ -59,6 +59,35 @@ object HistoricalRates {
      *
      * [byDay] must be sorted ascending by day.
      */
-    fun onOrBefore(byDay: List<Pair<String, java.math.BigDecimal>>, day: String): java.math.BigDecimal? =
-        byDay.lastOrNull { it.first <= day }?.second
+    fun onOrBefore(byDay: List<Pair<String, java.math.BigDecimal>>, day: String): java.math.BigDecimal? {
+        // A binary search, since the list is sorted and the value chart asks
+        // this once per asset per day.
+        var lo = 0
+        var hi = byDay.size - 1
+        var found: java.math.BigDecimal? = null
+        while (lo <= hi) {
+            val mid = (lo + hi) ushr 1
+            if (byDay[mid].first <= day) {
+                found = byDay[mid].second
+                lo = mid + 1
+            } else {
+                hi = mid - 1
+            }
+        }
+        return found
+    }
+
+    /**
+     * The rate for drawing a chart: on or before [day], else the oldest held.
+     *
+     * Deliberately looser than [onOrBefore], and only for charts. A ten year
+     * price chart reaches back past the first transaction, which is as far as
+     * rates are fetched, and the choice there is between a slightly off line
+     * and no line. A cost basis must never use this: there the wrong rate is a
+     * wrong number someone files a tax return on.
+     *
+     * [byDay] must be sorted ascending by day.
+     */
+    fun nearest(byDay: List<Pair<String, java.math.BigDecimal>>, day: String): java.math.BigDecimal? =
+        onOrBefore(byDay, day) ?: byDay.firstOrNull()?.second
 }

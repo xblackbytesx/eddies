@@ -13,8 +13,6 @@ import javax.inject.Singleton
 
 /** What is outstanding per asset, summed across every address staking it. */
 data class StakingTotals(val pendingByAsset: Map<String, BigDecimal>) {
-    fun pendingFor(assetId: String): BigDecimal = pendingByAsset[assetId] ?: BigDecimal.ZERO
-
     companion object {
         val Empty = StakingTotals(emptyMap())
     }
@@ -105,6 +103,4 @@ class StakingRepository @Inject constructor(
             error = message,
         )
     }
-
-    suspend fun forget(stakeAddress: String) = stakingDao.delete(stakeAddress)
 }

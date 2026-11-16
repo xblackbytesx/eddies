@@ -5,6 +5,8 @@ import androidx.hilt.work.HiltWorker
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.ExistingWorkPolicy
+import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
@@ -12,29 +14,26 @@ import androidx.work.WorkerParameters
 import com.eddies.app.data.price.FxRepository
 import com.eddies.app.data.price.PriceRepository
 import com.eddies.app.data.repo.PortfolioBackfill
-import com.eddies.app.data.repo.PortfolioRepository
 import com.eddies.app.data.staking.StakingRepository
+import com.eddies.app.widget.WidgetWorker
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
-import kotlinx.coroutines.flow.first
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * The once-a-day housekeeping pass: record today's portfolio value, refresh the
- * ECB rates, and prune old price snapshots.
+ * The once-a-day housekeeping pass: refresh the ECB rates and the staking
+ * figures, bring the value chart up to yesterday, and prune old candles.
  *
- * The snapshot is the reason this exists. A portfolio value chart cannot be
- * derived from the ledger alone, because that needs a historical price for every
- * held asset back to the first purchase. One row per day going forward is exact,
- * costs nothing, and keeps working when a price API changes or disappears.
+ * Opening the app does all of this too. The worker is what keeps the chart
+ * current for someone who has not opened it for a week, and what makes the
+ * first screen after that week instant instead of a fetch per holding.
  */
 @HiltWorker
 class DailyWorker @AssistedInject constructor(
     @Assisted context: Context,
     @Assisted params: WorkerParameters,
-    private val portfolio: PortfolioRepository,
     private val prices: PriceRepository,
     private val fx: FxRepository,
     private val backfill: PortfolioBackfill,
@@ -44,27 +43,12 @@ class DailyWorker @AssistedInject constructor(
     override suspend fun doWork(): Result {
         return try {
             fx.refreshIfStale()
-
-            // Before the snapshot, so today's recorded total includes rewards
-            // that accrued since the last run.
             runCatching { staking.syncAll() }
-
-            // first() rather than collect: this needs one settled value, and the
-            // summary flow never completes on its own.
-            val summary = portfolio.summary.first()
-            if (summary.holdings.isNotEmpty()) {
-                portfolio.snapshotToday(summary)
-            }
-
-            // Cheap after the first run: history is cached, so this is a delta
-            // per asset and a replay over data already on disk.
+            // After the rates, since yesterday's closes are converted with them.
             runCatching { backfill.run() }
-
             prices.prune()
             Result.success()
         } catch (e: Exception) {
-            // Retried rather than failed: a missed day leaves a gap in the chart,
-            // and the next run cannot fill it in retrospectively.
             Result.retry()
         }
     }
@@ -96,4 +80,35 @@ class WorkScheduler @Inject constructor(
                 .build(),
         )
     }
+
+    /**
+     * Half-hourly while a widget is on the home screen. Fifteen minutes is the
+     * floor WorkManager allows, and a net worth does not need watching that
+     * closely from a launcher.
+     */
+    fun scheduleWidgetRefresh() {
+        workManager.enqueueUniquePeriodicWork(
+            WidgetWorker.PERIODIC,
+            ExistingPeriodicWorkPolicy.KEEP,
+            PeriodicWorkRequestBuilder<WidgetWorker>(30, TimeUnit.MINUTES)
+                .setConstraints(connected())
+                .build(),
+        )
+    }
+
+    fun cancelWidgetRefresh() {
+        workManager.cancelUniqueWork(WidgetWorker.PERIODIC)
+    }
+
+    /** One refresh soon, for a widget that has just been placed or redrawn. */
+    fun refreshWidgetNow() {
+        workManager.enqueueUniqueWork(
+            WidgetWorker.ONCE,
+            ExistingWorkPolicy.KEEP,
+            OneTimeWorkRequestBuilder<WidgetWorker>().setConstraints(connected()).build(),
+        )
+    }
+
+    private fun connected(): Constraints =
+        Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
 }

@@ -12,7 +12,7 @@ import javax.inject.Singleton
 
 /**
  * At-rest encryption for anything secret the app holds: the database key, an
- * optional CoinGecko API key, the app-lock PIN hash.
+ * optional CoinGecko and stock API keys.
  *
  * Tink AEAD wrapped by an Android Keystore master key. This is the current
  * recommended replacement for the deprecated EncryptedSharedPreferences.

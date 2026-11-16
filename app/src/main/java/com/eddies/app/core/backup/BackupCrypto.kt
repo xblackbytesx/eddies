@@ -21,13 +21,23 @@ import javax.crypto.spec.SecretKeySpec
  * The layout is a compatibility contract. Changing any constant here strands
  * every backup a user has already written, so a change means a new VERSION and a
  * decrypt path that still reads the old one.
+ *
+ * Version 1 derived the key with 210,000 PBKDF2 iterations. Version 2 uses
+ * 600,000, the current OWASP figure for HMAC-SHA256, and is otherwise the same
+ * envelope. The version byte selects the count, so files of both kinds open.
  */
 object BackupCrypto {
     private val MAGIC = byteArrayOf('E'.code.toByte(), 'D'.code.toByte(), 'D'.code.toByte(), 'Y'.code.toByte())
-    private const val VERSION = 1
+    private const val VERSION = 2
     private const val SALT_LEN = 16
     private const val IV_LEN = 12
-    private const val ITERATIONS = 210_000
+
+    /** Iterations per file version. Never edit an entry: add a version instead. */
+    private fun iterationsFor(version: Int): Int? = when (version) {
+        1 -> 210_000
+        2 -> 600_000
+        else -> null
+    }
     private const val KEY_BITS = 256
     private const val TAG_BITS = 128
 
@@ -36,15 +46,20 @@ object BackupCrypto {
 
     class InvalidBackupException(message: String) : Exception(message)
 
-    fun encrypt(plaintext: ByteArray, passphrase: CharArray): ByteArray {
+    fun encrypt(plaintext: ByteArray, passphrase: CharArray): ByteArray =
+        encrypt(plaintext, passphrase, VERSION)
+
+    /** Writes a given envelope version. Only tests ask for an old one. */
+    internal fun encrypt(plaintext: ByteArray, passphrase: CharArray, version: Int): ByteArray {
+        val iterations = requireNotNull(iterationsFor(version)) { "Unknown backup version $version" }
         val rng = SecureRandom()
         val salt = ByteArray(SALT_LEN).also(rng::nextBytes)
         val iv = ByteArray(IV_LEN).also(rng::nextBytes)
-        val key = deriveKey(passphrase, salt)
+        val key = deriveKey(passphrase, salt, iterations)
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.ENCRYPT_MODE, key, GCMParameterSpec(TAG_BITS, iv))
         val ct = cipher.doFinal(plaintext)
-        return MAGIC + byteArrayOf(VERSION.toByte()) + salt + iv + ct
+        return MAGIC + byteArrayOf(version.toByte()) + salt + iv + ct
     }
 
     fun decrypt(data: ByteArray, passphrase: CharArray): ByteArray {
@@ -55,11 +70,12 @@ object BackupCrypto {
         }
         var off = MAGIC.size
         val version = data[off].toInt(); off += 1
-        if (version != VERSION) throw InvalidBackupException("Unsupported backup version ($version).")
+        val iterations = iterationsFor(version)
+            ?: throw InvalidBackupException("Unsupported backup version ($version).")
         val salt = data.copyOfRange(off, off + SALT_LEN); off += SALT_LEN
         val iv = data.copyOfRange(off, off + IV_LEN); off += IV_LEN
         val ct = data.copyOfRange(off, data.size)
-        val key = deriveKey(passphrase, salt)
+        val key = deriveKey(passphrase, salt, iterations)
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(TAG_BITS, iv))
         return try {
@@ -74,9 +90,9 @@ object BackupCrypto {
     fun looksLikeBackup(data: ByteArray): Boolean =
         data.size >= MAGIC.size && data.copyOfRange(0, MAGIC.size).contentEquals(MAGIC)
 
-    private fun deriveKey(passphrase: CharArray, salt: ByteArray): SecretKeySpec {
+    private fun deriveKey(passphrase: CharArray, salt: ByteArray, iterations: Int): SecretKeySpec {
         val factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
-        val spec = PBEKeySpec(passphrase, salt, ITERATIONS, KEY_BITS)
+        val spec = PBEKeySpec(passphrase, salt, iterations, KEY_BITS)
         val keyBytes = factory.generateSecret(spec).encoded
         return SecretKeySpec(keyBytes, "AES")
     }

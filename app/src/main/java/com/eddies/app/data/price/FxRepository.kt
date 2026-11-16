@@ -57,24 +57,39 @@ class FxRepository @Inject constructor(
      */
     suspend fun historicalTable(): FxTable = tableOf(fxDao.all())
 
-    private fun tableOf(rows: List<FxRateEntity>): FxTable {
-        val byQuote = rows.groupBy { it.quote }.mapValues { (_, v) -> v.sortedBy { it.day } }
+    /**
+     * Rates for drawing charts, which fall back to the oldest rate held when a
+     * date predates everything known. Never use this for a cost basis.
+     */
+    fun chartTableFlow(): Flow<FxTable> = fxDao.observeAll().map { rows -> tableOf(rows, lenient = true) }
+
+    suspend fun chartTable(): FxTable = tableOf(fxDao.all(), lenient = true)
+
+    private fun tableOf(rows: List<FxRateEntity>, lenient: Boolean = false): FxTable {
+        // Parsed and sorted once, here, not per lookup. The value chart asks for
+        // a rate per asset per day, and re-parsing every stored rate for each
+        // of those questions was most of the cost of drawing it.
+        val byQuote = rows.groupBy { it.quote }.mapValues { (_, v) ->
+            v.mapNotNull { r -> runCatching { r.day to BigDecimal(r.rate) }.getOrNull() }
+                .sortedBy { it.first }
+        }
         return FxTable { from, to, atEpochMs ->
             if (from == to) return@FxTable BigDecimal.ONE
             val day = dayOf(atEpochMs)
-            val fromRate = rateOn(byQuote, from, day) ?: return@FxTable null
-            val toRate = rateOn(byQuote, to, day) ?: return@FxTable null
+            val fromRate = rateOn(byQuote, from, day, lenient) ?: return@FxTable null
+            val toRate = rateOn(byQuote, to, day, lenient) ?: return@FxTable null
             if (fromRate.signum() == 0) null else toRate.divide(fromRate, com.eddies.app.domain.MC)
         }
     }
 
     private fun rateOn(
-        byQuote: Map<String, List<FxRateEntity>>,
+        byQuote: Map<String, List<Pair<String, BigDecimal>>>,
         currency: String,
         day: String,
+        lenient: Boolean,
     ): BigDecimal? {
         if (currency == PIVOT) return BigDecimal.ONE
-        val rows = byQuote[currency] ?: return null
+        val byDay = byQuote[currency] ?: return null
         // The rate in force on a date is the last one published on or before it:
         // weekends and holidays have no publication and must not read as a gap.
         //
@@ -82,23 +97,8 @@ class FxRepository @Inject constructor(
         // "the oldest rate we happen to hold". Falling back used to value a 2024
         // purchase at a 2026 rate, which is a wrong cost basis that looks
         // perfectly plausible. Unknown degrades to no basis, which is visible.
-        return com.eddies.app.domain.HistoricalRates.onOrBefore(
-            rows.mapNotNull { r -> runCatching { r.day to BigDecimal(r.rate) }.getOrNull() },
-            day,
-        )
-    }
-
-    /** A single current rate, for converting a fetched candle series. */
-    suspend fun converter1(from: String, to: String): java.math.BigDecimal? {
-        if (from.equals(to, ignoreCase = true)) return java.math.BigDecimal.ONE
-        val rows = fxDao.all()
-        if (rows.isEmpty()) return null
-        val latestDay = rows.maxOfOrNull { it.day } ?: return null
-        val table = FiatConverter(
-            rows.filter { it.day == latestDay }.associate { it.quote to java.math.BigDecimal(it.rate) },
-            pivot = PIVOT,
-        )
-        return table.rate(from.uppercase(), to.uppercase())
+        return if (lenient) com.eddies.app.domain.HistoricalRates.nearest(byDay, day)
+        else com.eddies.app.domain.HistoricalRates.onOrBefore(byDay, day)
     }
 
     /**

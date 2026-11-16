@@ -1,81 +1,69 @@
 [versions]
-# Build / language. Pinned to match the sibling Android projects; see AGENTS.md
-# for why these are not the newest.
-agp = "8.13.0"
-kotlin = "2.2.20"
-ksp = "2.2.20-2.0.2"
-coreKtx = "1.17.0"
-coreSplashscreen = "1.0.1"
-coroutines = "1.10.2"
-serialization = "1.9.0"
+# Build / language. Matched to the sibling Android projects (AGP 9, built-in
+# Kotlin), so one container recipe and one set of gotchas covers all of them.
+agp = "9.4.1"
+kotlin = "2.4.20"
+ksp = "2.3.12"
+coreKtx = "1.19.1"
+coreSplashscreen = "1.2.0"
+coroutines = "1.11.0"
+serialization = "1.11.0"
 
 # Compose
-activityCompose = "1.11.0"
-composeBom = "2025.10.00"
+activityCompose = "1.13.0"
+composeBom = "2026.09.00"
 # Overrides the BOM for material3 only. HorizontalFloatingToolbar is the whole
-# reason: 1.4.0 stable ships its design tokens and not the composable, and there
-# is no stable 1.5.0 yet (checked 2026-08-27, latest is 1.5.0-alpha27).
-#
-# Pinned to alpha18 and not to the newest alpha on purpose. alpha19 raises
-# minCompileSdk to 37 and minAndroidGradlePluginVersion to 9.1.0, which is the
-# same wall that keeps sqlcipher at 4.9.0: taking it would drag AGP, the
-# container and CI along with it. alpha18 asks for compileSdk 35 and AGP 8.6.0,
-# both of which this project already exceeds. It still pulls compose foundation
-# and ui up to 1.11.0-beta02, which is why this lives on a branch.
-material3Alpha = "1.5.0-alpha18"
-navigationCompose = "2.9.5"
-lifecycle = "2.9.4"
+# reason: the BOM still maps material3 to 1.4, which ships the toolbar's design
+# tokens and not the composable. Drop this line once a BOM carries 1.5.0 stable.
+material3 = "1.5.0-rc01"
+navigationCompose = "2.10.2"
+lifecycle = "2.11.0"
 
 # DI
-hilt = "2.57.2"
-hiltAndroidX = "1.3.0"
+hilt = "2.60.1"
+hiltAndroidX = "1.4.0"
 
 # Persistence
-room = "2.8.2"
-datastore = "1.1.7"
-# Held at 4.9.0. 4.18.0 declares minCompileSdk=37, which demands AGP 9.1 and
-# would drag the whole toolchain, the container and CI up with it. 4.9.0 sets
-# minCompileSdk=1 and its arm64 LOAD segments are 0x4000 aligned, so it is still
-# correct for the 16 KB page size Android 15 requires. Verified 2026-08-25.
-sqlcipher = "4.9.0"
-sqlite = "2.5.2"
+room = "2.8.5"
+datastore = "1.2.1"
+# Check the arm64 LOAD segments stay 0x4000 aligned when bumping
+# (`readelf -lW libsqlcipher.so`): Android 15 requires 16 KB pages.
+sqlcipher = "4.20.0"
+# The version Room itself is built against. Only here for the migration API.
+sqlite = "2.6.2"
 
 # Networking
-ktor = "3.3.1"
+ktor = "3.6.0"
 
 # Image loading
-coil = "3.3.0"
+coil = "3.6.3"
 
 # Crypto / security
-tink = "1.18.0"
+tink = "1.23.0"
 biometric = "1.1.0"
-fragment = "1.8.9"
+fragment = "1.9.1"
 
 # Background work
-work = "2.10.5"
+work = "2.12.0"
 
 # Testing
 junit = "4.13.2"
-androidxJunit = "1.3.0"
-espressoCore = "3.7.0"
-turbine = "1.2.1"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-core-splashscreen = { group = "androidx.core", name = "core-splashscreen", version.ref = "coreSplashscreen" }
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
-kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "coroutines" }
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "serialization" }
 
 # Compose artifacts intentionally carry no version: the BOM governs them. The one
-# exception is material3, pinned above to an alpha for HorizontalFloatingToolbar.
+# exception is material3, pinned above for HorizontalFloatingToolbar.
 androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
 androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
 androidx-ui = { group = "androidx.compose.ui", name = "ui" }
 androidx-ui-graphics = { group = "androidx.compose.ui", name = "ui-graphics" }
 androidx-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
 androidx-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
-androidx-material3 = { group = "androidx.compose.material3", name = "material3", version.ref = "material3Alpha" }
+androidx-material3 = { group = "androidx.compose.material3", name = "material3", version.ref = "material3" }
 androidx-material-icons-extended = { group = "androidx.compose.material", name = "material-icons-extended" }
 androidx-navigation-compose = { group = "androidx.navigation", name = "navigation-compose", version.ref = "navigationCompose" }
 androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycle" }
@@ -107,7 +95,6 @@ ktor-client-websockets = { group = "io.ktor", name = "ktor-client-websockets", v
 ktor-serialization-kotlinx-json = { group = "io.ktor", name = "ktor-serialization-kotlinx-json", version.ref = "ktor" }
 
 coil-compose = { group = "io.coil-kt.coil3", name = "coil-compose", version.ref = "coil" }
-coil-network-okhttp = { group = "io.coil-kt.coil3", name = "coil-network-okhttp", version.ref = "coil" }
 
 tink-android = { group = "com.google.crypto.tink", name = "tink-android", version.ref = "tink" }
 androidx-biometric = { group = "androidx.biometric", name = "biometric", version.ref = "biometric" }
@@ -118,13 +105,9 @@ androidx-fragment-ktx = { group = "androidx.fragment", name = "fragment-ktx", ve
 androidx-work-runtime-ktx = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "work" }
 
 junit = { group = "junit", name = "junit", version.ref = "junit" }
-turbine = { group = "app.cash.turbine", name = "turbine", version.ref = "turbine" }
-androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "androidxJunit" }
-androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
-kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }

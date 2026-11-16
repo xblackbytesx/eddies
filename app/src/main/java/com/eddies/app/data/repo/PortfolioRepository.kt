@@ -2,7 +2,6 @@ package com.eddies.app.data.repo
 
 import com.eddies.app.data.db.dao.AssetDao
 import com.eddies.app.data.db.dao.PortfolioSnapshotDao
-import com.eddies.app.data.db.entity.PortfolioSnapshotEntity
 import com.eddies.app.data.prefs.SettingsDataStore
 import com.eddies.app.data.price.FxRepository
 import com.eddies.app.data.price.PriceRepository
@@ -12,11 +11,10 @@ import com.eddies.app.domain.FxTable
 import com.eddies.app.domain.PortfolioBuilder
 import com.eddies.app.domain.PortfolioScope
 import com.eddies.app.domain.PortfolioSummary
-import com.eddies.app.domain.Transaction
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import java.math.BigDecimal
@@ -87,17 +85,25 @@ class PortfolioRepository @Inject constructor(
     }.flowOn(kotlinx.coroutines.Dispatchers.Default)
 
     /**
-     * Daily totals for a scope. Rows are summed per day rather than taken
-     * directly, because a day holds one row per class and the combined chart is
-     * their sum.
+     * Daily totals for a scope, up to yesterday. Rows are summed per day rather
+     * than taken directly, because a day holds one row per class and the
+     * combined chart is their sum.
+     *
+     * Only rows in the current base currency. Changing it leaves the old rows
+     * behind until the history is replayed, and adding euros to dollars for
+     * that moment would draw a chart in no currency at all.
      */
     fun history(days: Int, scope: PortfolioScope = PortfolioScope.ALL): Flow<List<PortfolioPoint>> {
         val from = dayOf(System.currentTimeMillis() - days * 86_400_000L)
         val source = scope.assetClass
             ?.let { snapshotDao.observeFrom(from, it) }
             ?: snapshotDao.observeFrom(from)
-        return source.map { rows ->
-            rows.groupBy { it.day }
+        return combine(
+            source,
+            settings.settings.map { it.baseCurrency }.distinctUntilChanged(),
+        ) { rows, base ->
+            rows.filter { it.currency == base }
+                .groupBy { it.day }
                 .toSortedMap()
                 .map { (day, dayRows) ->
                     PortfolioPoint(
@@ -110,32 +116,18 @@ class PortfolioRepository @Inject constructor(
     }
 
     /**
-     * Records today's total. Called by the daily worker and after any edit.
-     *
-     * The value chart cannot be derived from the ledger alone: that needs a
-     * historical price for every held asset back to the first purchase. One row
-     * per day going forward is exact, costs nothing, and keeps working when a
-     * price API changes or disappears.
+     * Changes whenever the value chart needs replaying: the ledger, the splits,
+     * or a setting the replay reads. Carries no data worth using, only the fact
+     * that it changed.
      */
-    suspend fun snapshotToday(summaryNow: PortfolioSummary) {
-        val day = dayOf(System.currentTimeMillis())
-        // One row per class. The combined chart sums them, so the parts and the
-        // whole are the same numbers and cannot drift apart.
-        val rows = summaryNow.perClass().map { (assetClass, totals) ->
-            PortfolioSnapshotEntity(
-                day = day,
-                assetClass = assetClass,
-                totalValue = totals.value.toPlainString(),
-                costBasis = totals.costBasis.toPlainString(),
-                currency = summaryNow.currency,
-            )
-        }
-        if (rows.isEmpty()) return
-        snapshotDao.upsert(rows)
-        settings.setLastSnapshotDay(day)
-    }
-
-    suspend fun snapshotCount(): Int = snapshotDao.count()
+    val historyInputs: Flow<Any> = combine(
+        transactions.observeAll(),
+        corporateActions.splitsByAsset,
+        settings.settings
+            .map { Triple(it.baseCurrency, it.costBasisMethod, it.includeFeesInBasis) }
+            .distinctUntilChanged(),
+    ) { txs, splits, cfg -> Triple(txs, splits, cfg) }
+        .distinctUntilChanged()
 
     private fun dayOf(epochMs: Long): String =
         DAY_FORMAT.format(Instant.ofEpochMilli(epochMs).atZone(ZoneId.systemDefault()))

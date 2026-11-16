@@ -75,4 +75,14 @@ class HistoricalRatesTest {
         assertEquals(0, BigDecimal("1.1050").compareTo(HistoricalRates.onOrBefore(spanning, "2024-01-01")))
         assertEquals(0, BigDecimal("1.0956").compareTo(HistoricalRates.onOrBefore(spanning, "2024-01-02")))
     }
+
+    @Test
+    fun `a chart may fall back to the oldest rate where a cost basis may not`() {
+        // Before the first publication: unknown for a basis, the oldest for a chart.
+        assertNull(HistoricalRates.onOrBefore(rates, "2024-04-01"))
+        assertEquals(0, BigDecimal("1.0638").compareTo(HistoricalRates.nearest(rates, "2024-04-01")))
+        // Otherwise the two agree.
+        assertEquals(0, BigDecimal("1.0653").compareTo(HistoricalRates.nearest(rates, "2024-04-20")))
+        assertNull(HistoricalRates.nearest(emptyList(), "2024-04-20"))
+    }
 }

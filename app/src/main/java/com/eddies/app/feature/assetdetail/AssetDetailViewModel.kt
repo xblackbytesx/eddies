@@ -70,6 +70,7 @@ class AssetDetailViewModel @Inject constructor(
     private val staking: StakingRepository,
     private val icons: IconResolver,
     private val sourceRefs: com.eddies.app.data.db.dao.AssetSourceRefDao,
+    fx: com.eddies.app.data.price.FxRepository,
 ) : ViewModel() {
 
     val assetId: String = savedStateHandle.toRoute<AssetDetailRoute>().assetId
@@ -97,10 +98,10 @@ class AssetDetailViewModel @Inject constructor(
      * be nine thousand points for a line a few hundred pixels wide.
      */
     private val candles = range.flatMapLatest { r ->
-        val interval = if (r == ChartRange.DAY) CandleInterval.HOUR else CandleInterval.DAY
+        val interval = if (r.intraday) CandleInterval.HOUR else CandleInterval.DAY
         val since = System.currentTimeMillis() - r.days * 86_400_000L
         history.observe(assetId, interval, since)
-    }
+    }.combine(fx.chartTableFlow()) { rows, table -> rows to table }
 
     val state: StateFlow<AssetDetailUiState> = combine(
         portfolio.summary.map { s -> s.holdings.firstOrNull { it.asset.id == assetId } },
@@ -117,7 +118,7 @@ class AssetDetailViewModel @Inject constructor(
         ) { r, scrub, isLoading, watched, (custodyRow, balances, tdg) ->
             Extras(r, scrub, isLoading, assetId in watched, custodyRow, stakingStatusFor(balances), tdg)
         },
-    ) { holding, txs, cfg, candleRows, extras ->
+    ) { holding, txs, cfg, (candleRows, chartFx), extras ->
         val (r, scrub, isLoading, watched, custodyRow) = extras
         AssetDetailUiState(
             holding = holding,
@@ -126,8 +127,15 @@ class AssetDetailViewModel @Inject constructor(
             advanced = cfg.advancedMode,
             hidden = cfg.hideBalances,
             currency = cfg.baseCurrency,
-            history = candleRows.map { row ->
-                ChartPoint(row.timestamp, runCatching { row.close.toDouble() }.getOrDefault(0.0))
+            // Candles are stored as quoted and converted here, each at its own
+            // date. One that cannot be converted is left out: a dollar price
+            // drawn on a euro axis is worse than a shorter line.
+            history = candleRows.mapNotNull { row ->
+                val close = runCatching { java.math.BigDecimal(row.close) }.getOrNull()
+                    ?: return@mapNotNull null
+                val rate = if (row.currency == cfg.baseCurrency) java.math.BigDecimal.ONE
+                else chartFx.rate(row.currency, cfg.baseCurrency, row.timestamp) ?: return@mapNotNull null
+                ChartPoint(row.timestamp, (close * rate).toDouble())
             },
             range = r,
             loadingHistory = isLoading,
@@ -150,7 +158,7 @@ class AssetDetailViewModel @Inject constructor(
         // user never opens.
         viewModelScope.launch {
             range.collect { r ->
-                val interval = if (r == ChartRange.DAY) CandleInterval.HOUR else CandleInterval.DAY
+                val interval = if (r.intraday) CandleInterval.HOUR else CandleInterval.DAY
                 loading.value = true
                 runCatching { history.ensureFresh(assetId, interval) }
                 loading.value = false

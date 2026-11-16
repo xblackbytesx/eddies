@@ -126,8 +126,10 @@ fun BackupScreen(
         }
 
         Section(
-            title = "Spreadsheet export",
-            subtitle = "Plain CSV. Not encrypted: anyone who opens the file can read your ledger.",
+            title = "Spreadsheets and broker files",
+            subtitle = "Plain CSV. Not encrypted: anyone who opens the file can read your ledger. " +
+                "Import also reads transaction exports from DEGIRO, Kraken and Bitvavo as they are. " +
+                "Shares in a broker file are looked up online by ISIN.",
         ) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(

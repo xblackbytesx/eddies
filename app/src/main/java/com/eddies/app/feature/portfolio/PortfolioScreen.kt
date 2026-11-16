@@ -59,7 +59,6 @@ fun PortfolioScreen(
     val zone = remember { ZoneId.systemDefault() }
 
     LaunchedEffect(state.summary.holdings.size) {
-        viewModel.backfillIfEmpty()
         viewModel.markOnboardedIfHolding()
     }
 

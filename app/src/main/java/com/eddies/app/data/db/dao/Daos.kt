@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.Upsert
 import com.eddies.app.data.db.entity.AccountEntity
 import com.eddies.app.data.db.entity.AssetEntity
@@ -38,9 +39,6 @@ interface AssetDao {
 
     @Query("SELECT * FROM assets WHERE id IN (:ids)")
     suspend fun byIds(ids: List<String>): List<AssetEntity>
-
-    @Query("SELECT * FROM assets WHERE id IN (:ids)")
-    fun observeByIds(ids: List<String>): Flow<List<AssetEntity>>
 
     @Query("SELECT * FROM assets")
     fun observeAll(): Flow<List<AssetEntity>>
@@ -100,9 +98,6 @@ interface AssetSourceRefDao {
      */
     @Query("SELECT assetId FROM asset_source_refs WHERE source = :source AND sourceSymbol = :sourceSymbol LIMIT 1")
     suspend fun assetForSource(source: PriceSourceId, sourceSymbol: String): String?
-
-    @Query("DELETE FROM asset_source_refs WHERE assetId = :assetId AND source = :source")
-    suspend fun clearFor(assetId: String, source: String)
 
     /**
      * Carries a merged asset's price routing over to the one being kept.
@@ -203,24 +198,12 @@ interface PriceDao {
     )
     fun observeCandles(assetId: String, interval: CandleInterval, since: Long): Flow<List<PriceCandleEntity>>
 
-    @Query(
-        """
-        SELECT * FROM price_candles
-        WHERE assetId = :assetId AND interval = :interval AND timestamp >= :since
-        ORDER BY timestamp
-        """,
-    )
-    suspend fun candles(assetId: String, interval: CandleInterval, since: Long): List<PriceCandleEntity>
-
     /**
      * The newest candle we hold, which is where a delta fetch resumes from.
      * Null means nothing is cached and the first fetch should pull everything.
      */
     @Query("SELECT MAX(timestamp) FROM price_candles WHERE assetId = :assetId AND interval = :interval")
     suspend fun newestCandle(assetId: String, interval: CandleInterval): Long?
-
-    @Query("SELECT MIN(timestamp) FROM price_candles WHERE assetId = :assetId AND interval = :interval")
-    suspend fun oldestCandle(assetId: String, interval: CandleInterval): Long?
 
     /** Daily closes for every asset in one query, for the portfolio backfill. */
     @Query(
@@ -231,6 +214,16 @@ interface PriceDao {
         """,
     )
     suspend fun dailyForAssets(assetIds: List<String>, since: Long): List<PriceCandleEntity>
+
+    /** Hourly candles for every asset in one query, for the intraday value chart. */
+    @Query(
+        """
+        SELECT * FROM price_candles
+        WHERE interval = 'HOUR' AND assetId IN (:assetIds) AND timestamp >= :since
+        ORDER BY timestamp
+        """,
+    )
+    suspend fun hourlyForAssets(assetIds: List<String>, since: Long): List<PriceCandleEntity>
 
     /** Hourly candles age out; daily ones are the long-term series and are kept. */
     @Query("DELETE FROM price_candles WHERE interval = 'HOUR' AND timestamp < :before")
@@ -245,6 +238,10 @@ interface PriceDao {
      */
     @Query("DELETE FROM price_candles WHERE assetId = :assetId")
     suspend fun clearCandles(assetId: String)
+
+    /** The candles are a cache of public data. Emptying it costs a refetch and nothing else. */
+    @Query("DELETE FROM price_candles")
+    suspend fun clearAllCandles()
 
     @Query("DELETE FROM price_latest WHERE assetId = :assetId")
     suspend fun clearLatest(assetId: String)
@@ -290,14 +287,22 @@ interface PortfolioSnapshotDao {
     )
     fun observeFrom(fromDay: String, assetClass: AssetClass): Flow<List<PortfolioSnapshotEntity>>
 
-    @Query("SELECT * FROM portfolio_snapshots ORDER BY day")
-    suspend fun all(): List<PortfolioSnapshotEntity>
-
-    @Query("SELECT COUNT(*) FROM portfolio_snapshots")
-    suspend fun count(): Int
-
     @Query("DELETE FROM portfolio_snapshots")
     suspend fun deleteAll()
+
+    /**
+     * Swaps the whole history for a freshly replayed one, in one transaction.
+     *
+     * Replaced rather than upserted: a transaction that was deleted, or moved
+     * to a later date, has to take its days off the chart again, and an upsert
+     * can only ever add or overwrite. One transaction, so the chart never
+     * observes the empty table in between.
+     */
+    @Transaction
+    suspend fun replaceAll(snapshots: List<PortfolioSnapshotEntity>) {
+        deleteAll()
+        upsert(snapshots)
+    }
 }
 
 @Dao

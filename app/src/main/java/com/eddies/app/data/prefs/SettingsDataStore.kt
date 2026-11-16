@@ -11,7 +11,6 @@ import androidx.datastore.preferences.preferencesDataStore
 import com.eddies.app.core.crypto.SecretStore
 import com.eddies.app.core.design.ThemeMode
 import com.eddies.app.domain.CostBasisMethod
-import com.eddies.app.domain.PriceSourceId
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -69,16 +68,7 @@ data class AppSettings(
     // Lifecycle
     val onboarded: Boolean = false,
     val seedVersion: Int = 0,
-    val lastSnapshotDay: String = "",
-) {
-    /** The feed the pipeline should try first, or null when polling only. */
-    val preferredSource: PriceSourceId?
-        get() = when (realtimeFeed) {
-            RealtimeFeed.KRAKEN -> PriceSourceId.KRAKEN
-            RealtimeFeed.BINANCE -> PriceSourceId.BINANCE
-            RealtimeFeed.OFF -> null
-        }
-}
+)
 
 @Singleton
 class SettingsDataStore @Inject constructor(
@@ -106,8 +96,6 @@ class SettingsDataStore @Inject constructor(
         val hideInRecents = booleanPreferencesKey("hide_in_recents")
         val onboarded = booleanPreferencesKey("onboarded")
         val seedVersion = intPreferencesKey("seed_version")
-        val lastSnapshotDay = stringPreferencesKey("last_snapshot_day")
-        val pinCipher = stringPreferencesKey("pin_cipher")
         val lastFxDay = longPreferencesKey("last_fx_fetch")
     }
 
@@ -133,7 +121,6 @@ class SettingsDataStore @Inject constructor(
             hideInRecents = p[Keys.hideInRecents] ?: true,
             onboarded = p[Keys.onboarded] ?: false,
             seedVersion = p[Keys.seedVersion] ?: 0,
-            lastSnapshotDay = p[Keys.lastSnapshotDay] ?: "",
         )
     }
 
@@ -158,7 +145,6 @@ class SettingsDataStore @Inject constructor(
     suspend fun setHideInRecents(on: Boolean) = put(Keys.hideInRecents, on)
     suspend fun setOnboarded() = put(Keys.onboarded, true)
     suspend fun setSeedVersion(v: Int) = put(Keys.seedVersion, v)
-    suspend fun setLastSnapshotDay(day: String) = put(Keys.lastSnapshotDay, day)
     suspend fun setLastFxFetch(atEpochMs: Long) = put(Keys.lastFxDay, atEpochMs)
 
     suspend fun lastFxFetch(): Long = context.dataStore.data.first()[Keys.lastFxDay] ?: 0L
@@ -193,19 +179,6 @@ class SettingsDataStore @Inject constructor(
             if (key.isBlank()) it.remove(Keys.stockApiKeyCipher)
             else it[Keys.stockApiKeyCipher] =
                 Base64.encodeToString(secrets.encrypt(key), Base64.NO_WRAP)
-        }
-    }
-
-    /** The app-lock PIN, stored sealed rather than hashed so it can be verified offline. */
-    suspend fun pin(): String {
-        val cipher = context.dataStore.data.first()[Keys.pinCipher] ?: return ""
-        return runCatching { secrets.decrypt(Base64.decode(cipher, Base64.NO_WRAP)) }.getOrDefault("")
-    }
-
-    suspend fun setPin(pin: String) {
-        context.dataStore.edit {
-            if (pin.isBlank()) it.remove(Keys.pinCipher)
-            else it[Keys.pinCipher] = Base64.encodeToString(secrets.encrypt(pin), Base64.NO_WRAP)
         }
     }
 

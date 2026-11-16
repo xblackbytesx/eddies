@@ -38,7 +38,8 @@ object DatabaseModule {
         // first query instead of here, where the cause is obvious.
         System.loadLibrary("sqlcipher")
 
-        val factory = SupportOpenHelperFactory(keyProvider.passphrase())
+        val databaseExists = context.getDatabasePath(EddiesDatabase.NAME).exists()
+        val factory = SupportOpenHelperFactory(keyProvider.passphrase(databaseExists))
         return Room.databaseBuilder(context, EddiesDatabase::class.java, EddiesDatabase.NAME)
             .openHelperFactory(factory)
             // Never fallbackToDestructiveMigration: a hand-entered ledger has no

@@ -87,25 +87,35 @@ January 2025 and hard-fails), the release job needs an explicit
 `permissions: contents: write`, and releases are published with `gh release
 create` rather than the Gitea API curl dance.
 
-### material3 is pinned to an alpha, and cannot move further
+### The toolchain is AGP 9, matched to the sibling projects
 
-The version catalog overrides the Compose BOM for material3 alone, at
-`1.5.0-alpha18`. `HorizontalFloatingToolbar` is not in 1.4.0 stable, which ships
-only its design tokens, and there is no stable 1.5.0.
+AGP 9.4.1, Kotlin 2.4.20, Gradle 9.8.0, `compileSdk` 37. Three things about AGP
+9 are easy to undo by accident:
 
-**alpha19 and later cannot be taken** without a toolchain upgrade: they raise
-`minCompileSdk` to 37 and `minAndroidGradlePluginVersion` to 9.1.0, the same wall
-that keeps sqlcipher at 4.9.0. Check `aar-metadata.properties` in the AAR before
-bumping, rather than upgrading and reading the error.
+- **Kotlin is built in.** There is no `org.jetbrains.kotlin.android` plugin, and
+  the `kotlin {}` and `ksp {}` blocks sit at the top level of
+  `app/build.gradle.kts`, not inside `android {}`.
+- **`buildFeatures.resValues = true` is load-bearing.** It is off by default
+  since AGP 9, and the flavours name the app through `resValue`. Without it
+  neither flavour has an `app_name`.
+- **The platform package is `platforms;android-37.0`**, with the minor version,
+  and the build-tools are `37.0.0`.
 
-The alpha pulls compose foundation and ui up to `1.11.0-beta02` transitively, so
-the app runs on a beta Compose runtime. That is the live cost of this component.
+**material3 overrides the Compose BOM, at `1.5.0-rc01`.**
+`HorizontalFloatingToolbar` is not in 1.4, which is what the BOM still maps to
+and which ships only the toolbar's design tokens. Drop the override once a BOM
+carries 1.5.0 stable. This app sat on `1.5.0-alpha18` and a beta Compose runtime
+for months because every later release needed AGP 9; the upgrade is what ended
+that, and it is the reason not to let the toolchain fall a major version behind
+again. APIs still move between prereleases: `ToggleButtonDefaults
+.toggleButtonColors` became `.colors`, and `floatingScrollBehavior()` became the
+`floatingScrollBehaviorModifier` property.
 
 ### Building without Docker
 
 The supported path is `make`. If you cannot run the container, a local toolchain
-works provided it matches `docker/Dockerfile`: Temurin JDK 21, Gradle 8.13,
-cmdline-tools 11076708, `android-36`, build-tools 36.0.0. Matching those is what
+works provided it matches `docker/Dockerfile`: Temurin JDK 21, Gradle 9.8.0,
+cmdline-tools 16111833, `android-37.0`, build-tools 37.0.0. Matching those is what
 makes a green local run predict a green `make test`.
 
 Always pass `--project-cache-dir` pointing outside the repo:
@@ -436,22 +446,25 @@ app/src/main/java/com/eddies/app/
     crypto/    SecretStore (Tink), DatabaseKeyProvider (SQLCipher key)
     backup/    BackupCrypto (passphrase envelope, pure javax.crypto)
     ui/        AssetIcon, PnlText, Section, IconResolver
-    result/    AppResult, AppError
   data/
     db/        Converters, EddiesDatabase, dao/Daos.kt, entity/Entities.kt
     prefs/     SettingsDataStore (one aggregated AppSettings flow)
     price/     PriceRepository (the merge point), Kraken/Binance/Aggregator sources, FxRepository
-    repo/      Asset, Transaction, Portfolio repositories
-    backup/    BackupManager, BackupModels, CsvExchange
-  domain/      PositionCalculator, PortfolioBuilder, FiatConverter, BackoffPolicy,
-               AssetIdentity, MoneyFormat, Ledger      (all framework-free)
+    repo/      Asset, Transaction, Portfolio repositories, PortfolioBackfill (daily
+               chart), PortfolioIntraday (hourly chart)
+    backup/    BackupManager, BackupModels, CsvExchange, BrokerCsv (pure),
+               BrokerImporter
+  domain/      PositionCalculator, PortfolioBuilder, PortfolioHistory, FiatConverter,
+               QuoteCurrency, LedgerDedup, WidgetContent, BackoffPolicy,
+               AssetIdentity, MoneyFormat, Ledger (all framework-free)
   di/          DatabaseModule, NetworkModule, WorkModule
   feature/     portfolio/ insights/ markets/ assetdetail/ addtransaction/
                transactions/ accounts/ settings/ backup/ about/ lock/ merge/
   navigation/  Routes, EddiesNavHost, RootViewModel
+  widget/      NetWorthWidget (receiver), WidgetUpdater, WidgetWorker
   work/        DailyWorker, WorkScheduler
 app/src/main/assets/  coins/*.png (389), asset_seed.json (600 coins)
-app/src/test/         mirrors the main tree. 96 tests
+app/src/test/         mirrors the main tree
 ```
 
 `domain/` is where the value is. Everything numeric or decision-making lives
@@ -681,14 +694,66 @@ bought, so `Holding.incomeValue` sums them and the combined view presents
 basis, which is why it needed its own accumulator rather than being folded into
 an existing one.
 
-**History is fetched lazily, and the backfill is the exception.** Opening an
+**History is fetched lazily, and the value chart is the exception.** Opening an
 asset fetches that asset and nothing else; the several hundred in the seed are
 never prefetched, and one in-flight request per (asset, interval) stops the chart
-and the backfill duplicating work. The portfolio backfill has to cover every held
-asset, because a total assembled from only the ones somebody happened to open is
-quietly missing the rest. Days before an asset's history begins are valued at
-zero rather than carrying the oldest known price backwards, which would draw a
-flat line that never happened.
+and the replay duplicating work. The value chart has to cover every held asset,
+because a total assembled from only the ones somebody happened to open is
+quietly missing the rest.
+
+Freshness is judged by when a series was last fetched, kept in a small
+preferences file, not by the newest candle's timestamp. A daily candle is stamped
+with the start of its day, so by that measure everything was stale by
+mid-morning and every share was stale all weekend. A delta resumes two candles
+before the newest one, because the newest was usually fetched mid-session and a
+delta starting after it would never replace it with the real close.
+
+**The value chart is derived, never recorded.** `PortfolioHistory` (pure, tested)
+replays the ledger against daily closes, and `PortfolioBackfill` stores the
+result in `portfolio_snapshots`, replacing the whole table each time. It is
+replayed on every change to the ledger, the splits or the settings it reads, so
+an edit with a past date moves the past. It stops at yesterday; today's point is
+the live total, so the end of the line is always the number above it.
+
+Three rules in it, each of which was a visible bug:
+
+- **A day with no close is not a day worth nothing.** Shares have no candle at
+  weekends or on holidays. Valuing those days at zero drew a square wave: the
+  stock side fell to the floor every Saturday and came back every Monday. A
+  holding is worth its last known close until a newer one arrives.
+- **Before the first close, a holding is worth what was paid for it.** Free
+  history is about two years deep on Kraken and one on CoinPaprika. An older
+  position used to count for nothing until the data began, then appear in a day.
+  The price on the user's own transaction stands in until then. This replaced
+  "valued at zero rather than inventing a flat line": the flat line is at a real
+  price, and the cliff it replaces never happened either.
+- **Today is never read from a candle.** There is no stock candle before the
+  market opens, so the newest point used to be crypto alone on most mornings.
+
+**Candles are stored in the currency they were quoted in.** Whoever reads one
+converts it at that candle's own date. They used to be converted on the way in,
+at the rate of the day they were fetched, with a silent fallback to 1.0 when no
+rate was loaded, and the whole cache was in the wrong currency the moment the
+base currency changed. `HistoricalRates.nearest` is the chart-only lookup that
+falls back to the oldest rate held; a cost basis must keep using `onOrBefore`.
+`PriceHistoryRepository.CACHE_VERSION` empties the cache once when the meaning
+of a stored candle changes. It is a cache, so that costs a refetch and nothing
+else.
+
+**A feed's currency label is not always a currency.** `QuoteCurrency` handles
+both cases. Yahoo marks London pence as `GBp`, and uppercasing that, the obvious
+thing to do to a currency code, makes a holding a hundred times its value: match
+the raw label first. And exchanges quote most coins against USDT, for which no
+central bank publishes a rate, so those holdings showed no value at all: dollar
+stablecoins convert as USD.
+
+**Every ledger column is named in both mappers, and a test holds them to it.**
+`TransactionEntity.toDomain` and `Transaction.toEntity` are two hand-written
+field lists. `cashAmount` was missing from both, so every dividend was stored as
+no cash at all while the calculator that sums dividends passed every test.
+`TransactionMappingTest` round-trips a fully populated row and fails when a new
+field is not in its sample. The lesson is wider than this one field: the pure
+domain being well tested says nothing about the glue either side of it.
 
 **Custody lives in its own table, and must.** `asset_custody` records where a
 coin is actually kept. It is deliberately not columns on `AssetEntity`, because
@@ -719,6 +784,63 @@ roughly one man in twelve.
 `SharingStarted.WhileSubscribed(5_000)`, so a backgrounded app holds no
 connection and there is no pause/resume code to get wrong. An empty portfolio
 opens no socket at all.
+
+**An import never adds a row the ledger already holds.** Every bulk insert goes
+through `TransactionRepository.importDeduplicated`, which asks `LedgerDedup`
+which rows are new. Rows are matched on content (asset, type, amounts by value,
+currency, timestamp, note), not on account or source, because a hand-entered row
+has no `externalId` for the unique index to catch. It counts: a file with two
+identical rows against a ledger with one adds one. Restoring a backup twice, or
+importing the CSV just exported, adds nothing. Never insert imported rows with
+`TransactionDao` directly.
+
+**A restore is one database transaction and reuses accounts by name.**
+`BackupManager.restore` used to insert every account again, so each restore made
+a second "Main". Settings are applied after the transaction because DataStore is
+not part of it.
+
+**The backup carries everything the user chose and the app cannot rederive.**
+That now includes `asset_source_refs` (which venue prices a holding) and the
+watchlist. A new user-owned table needs a field in `BackupPayload` with a
+default, or `BackupPayloadTest` fails to decode an old file.
+
+**The backup envelope is versioned by its key derivation.** Version 2 is 600,000
+PBKDF2 rounds, version 1 is 210,000, and the version byte picks the count on
+read. Never change an entry in `BackupCrypto.iterationsFor`: add a version.
+
+**The database key is never replaced while a database exists.**
+`DatabaseKeyProvider` retries a failed unseal and then throws
+`KeyUnavailableException`. The app crashing at launch is the intended outcome of
+a Keystore failure: the sealed key and the database are both still there, and
+the next launch usually succeeds. Do not add a fallback that generates a new key
+or deletes the file. `allowBackup` is false, so the "restored onto new hardware"
+case that the old fallback was written for cannot happen.
+
+**1D and 1W are replayed by the hour and never stored.**
+`PortfolioHistory.buildIntraday` is the same walk as the daily chart on a
+millisecond clock, fed by `PortfolioIntraday`. Hourly candles are filed at the
+end of their hour (`timestamp + 1h`), because that is when their close was true.
+Daily closes from before the window seed every asset, so a share at the weekend
+and a coin with no hourly source are carried, not dropped. The asset chart uses
+hourly candles for the same two ranges (`ChartRange.intraday`).
+
+**Broker files are recognized by header, never mapped by the user.**
+`BrokerCsv` reads DEGIRO, Kraken and Bitvavo exports and returns null for
+anything else, which then goes to `CsvExchange`. Shares resolve by ISIN online
+(`AssetRepository.shareByIsin`), coins by ticker from the seed only
+(`coinBySymbol`). An instrument that cannot be identified is left out and named
+in the result, never filed under a guess. Cash movements and coin-to-coin trades
+are not imported. The three formats are written from each broker's documented
+layout and pinned by `BrokerCsvTest`; none has been checked against a real
+account's file. Trade Republic is not supported because its export layout is
+not known here: do not add it from memory.
+
+**The widget says nothing the lock would hide.** `WidgetContent` masks amounts
+when balances are hidden or the app lock is on, and always shows when its
+figure was true. `WidgetUpdater` never draws a total with a holding unpriced and
+keeps the last good lines when a refresh fails. The receiver only redraws stored
+text; the encrypted database is opened by `WidgetWorker`, which is scheduled
+only while a widget exists. It is RemoteViews on purpose, not Glance.
 
 **No key ships in the APK, and one permission is declared.** `INTERNET`, plus
 network state and biometric. No storage permission: backups go through the
@@ -762,14 +884,13 @@ fill, which on this theme read as a headlight.
 
 ## Gotchas learned the hard way
 
-- **sqlcipher-android is held at 4.9.0.** 4.18.0 declares `minCompileSdk=37`,
-  which demands AGP 9.1 and would drag the toolchain, the container and CI up
-  together. 4.9.0 declares `minCompileSdk=1` and its arm64 LOAD segments are
-  `0x4000` aligned, so it is still correct for the 16 KB page size Android 15
-  requires. Verify with `readelf -lW libsqlcipher.so` before bumping.
-- **SQLCipher is two thirds of the APK.** Four ABIs at ~5 MB each. `splits.abi`
-  brings arm64-v8a down to ~15.8 MB against a 30 MB universal build; both are
-  published because this app is sideloaded.
+- **Check 16 KB alignment when bumping sqlcipher-android.** Android 15 requires
+  it. `readelf -lW libsqlcipher.so` should show the arm64 LOAD segments aligned
+  to `0x4000`.
+- **SQLCipher is the largest single thing in the APK.** One native library per
+  ABI, about 2 MB each since 4.20 (they were 5 MB at 4.9). `splits.abi` brings
+  arm64-v8a to ~13.6 MB against a 19 MB universal build; both are published
+  because this app is sideloaded.
 - **`System.loadLibrary("sqlcipher")` runs before the factory is constructed.**
   Lazily inside it throws `UnsatisfiedLinkError` on the first query instead of at
   startup, where the cause is obvious.
@@ -799,19 +920,25 @@ fill, which on this theme read as a headlight.
   asset. The v1 schema had a row per tick, and Kraken's ticker fires on every
   trade, so a single liquid pair was tens of thousands of rows a day and a
   database write per tick on a phone. Chart series live in `price_candles`.
+  Since milestone 12 the upserts are also batched: ticks collect in memory and
+  are written every 30 seconds and once more when the feed closes. Nothing
+  observes `price_latest`; only the next cold start reads it.
 - **`set -o pipefail` plus `head` aborts silently.** `scripts/refresh-icons.sh`
   materialises before taking the head, because closing the pipe early SIGPIPEs
   the upstream stages and kills the script mid-run with no error.
 
 ### Expected lint noise
 
-`make lint` reports 0 errors and 39 warnings, all of them known. 38 are
-`GradleDependency` / `NewerVersionAvailable` / `AndroidGradlePluginVersion`
-pointing at the AGP 9 upgrade declined above, one of which is material3 saying a
-newer alpha exists. The last is `ObsoleteSdkInt` on
-`res/mipmap-anydpi-v26`: lint suggests merging it into `mipmap-anydpi` since
-minSdk is 35, but AAPT does not index that folder and the build fails with
-*"resource mipmap/ic_launcher not found"*. The `-v26` qualifier stays.
+`make lint` reports 0 errors and a handful of warnings, all of one kind. All but
+one are `GradleDependency` / `NewerVersionAvailable` /
+`AndroidGradlePluginVersion`: a patch release that came out since the catalog
+was last matched to the sibling projects. They are a to-do list, not noise to
+live with: there were 38 of them while the AGP 9 upgrade was being declined, and
+that is how the app ended up a major version behind. The other is
+`ObsoleteSdkInt` on `res/mipmap-anydpi-v26`: lint suggests merging it into
+`mipmap-anydpi` since minSdk is 35, but AAPT does not index that folder and the
+build fails with *"resource mipmap/ic_launcher not found"*. The `-v26` qualifier
+stays.
 
 A new warning outside that set is a real finding. The ones already fixed and
 worth not reintroducing: `String.format` without an explicit `Locale.US` in chart
@@ -894,45 +1021,65 @@ changelog.
    screen repairs ledgers written before that.
 10. **Navigation pill.** The bottom bar became a floating toolbar, with an
     optional auto-hide.
+11. **Toolchain and correctness pass.** AGP 9, material3 off its alpha, SQLCipher
+    current. The value chart became a pure replay, and dividends, pence listings
+    and stablecoin quotes stopped being silently wrong.
+
+12. **Data safety pass.** Imports are idempotent, restores are transactional and
+    stop duplicating accounts, backups carry price routing and the watchlist,
+    the database key is never overwritten, the backup key derivation is 600,000
+    rounds, and live prices are written in batches.
+
+13. **Hourly chart, broker import, widget.** 1D and 1W draw a point per hour,
+    DEGIRO, Kraken and Bitvavo exports import as they are, and a net worth
+    widget sits on the home screen. Unused code found by the audit was removed.
 
 **Parked.** Dividend reinvestment (DRIP), where a dividend buys shares rather
 than paying cash. It needs per-position settings and reconciliation against what
 the broker actually did, and the ledger already represents it as a DIVIDEND plus
 a BUY for anyone who wants it today.
 
-Also parked, in rough order of value: a home screen widget (glanceable net worth
-is the highest-frequency interaction a tracker has), a broker-aware CSV import
-that recognises DEGIRO, Trade Republic, Kraken and Bitvavo exports by their
-header row rather than making the user map columns, and a per-year 1 January
-valuation, which several European wealth-tax regimes ask for and the daily
-snapshots can already answer exactly.
+Also parked, in rough order of value: Trade Republic in the broker import (needs
+a real export to read the layout from), translations, and a per-year 1 January
+valuation, which several European wealth-tax regimes ask for and
+`PortfolioHistory` can already answer for any past day.
 
 **Present a short plan before starting the next one.** Milestones get agreed
 before they get built, not after.
 
-## Verified without a device, 2026-08-26
+## Verified without a device, 2026-11-16
 
-`:app:testFullDebugUnitTest` (189 tests) passes, along with `lintFullDebug`
-(0 errors), `assembleFullDebug`, `assembleDemoDebug` and `assembleFullRelease`.
-Release splits are roughly 15 MB (arm64-v8a), 13.6 MB (armeabi-v7a), 15.7 MB
-(x86_64) and 28.8 MB (universal). The release APK was unzipped and checked to
-contain 389 coin icons, `asset_seed.json` and `libsqlcipher.so` for every ABI,
-and every native library was confirmed 16 KB aligned.
+On the AGP 9 toolchain: `:app:testFullDebugUnitTest` (246 tests) passes, along
+with `lintFullDebug` (0 errors), `assembleFullDebug`, `assembleDemoDebug` and
+`assembleFullRelease`, with no Kotlin compiler warnings. Release splits are
+roughly 13.6 MB (arm64-v8a), 12.5 MB (armeabi-v7a), 13.7 MB (x86_64) and 19.2 MB
+(universal). The release APK was unzipped and checked to contain 389 coin icons,
+`asset_seed.json` and `libsqlcipher.so` for every ABI, and the SQLCipher 4.20.0
+libraries were confirmed 16 KB aligned. `scripts/verify-flavours.sh` passes.
 
 `scripts/verify-migrations.sh` replays the whole migration chain against real
 SQLite and matches a fresh database. `scripts/verify-merge.sh` merges a seeded
 duplicate and confirms 3 buys across 2 entries become 3 buys on 1 with the
-Tradegate routing intact. Both were checked to actually fail: reordering the
-source-ref move after the asset delete turns the merge run red.
+Tradegate routing intact. Both were checked to actually fail when first written:
+reordering the source-ref move after the asset delete turns the merge run red.
 
-Every market-data contract above was checked against the live endpoints: Kraken
-(including holding a real WebSocket open), Binance, CoinPaprika, Frankfurter,
-Koios, Yahoo and Tradegate.
+Every market-data contract above was checked against the live endpoints on
+2026-08-26: Kraken (including holding a real WebSocket open), Binance,
+CoinPaprika, Frankfurter, Koios, Yahoo and Tradegate. They have not been
+re-checked since.
 
 What is NOT verified here, by construction. Without a phone, nothing about
 SQLCipher actually opening a database, the biometric prompt, socket behaviour
-under real backgrounding, or how the charts feel has been observed. Those need
-an install.
+under real backgrounding, or how the charts feel has been observed. That
+includes everything changed on 2026-11-16: the replayed value chart, the one-time
+candle refetch, pence and stablecoin pricing against real feeds, and the
+navigation pill on material3 1.5.0-rc01, and all of milestone 12: a real
+restore into a populated ledger, a restore of a version 1 backup file, the
+database key path, and prices surviving a cold start now that they are written
+in batches. And all of milestone 13: the hourly chart against real hourly
+candles, a broker import of a real export file, and the widget on a launcher
+(placing it, the half-hourly refresh, masking with the lock on). Those need an
+install.
 
 **Do not diagnose device-only behaviour from the code alone.** State the
 hypothesis, name the line of logcat that would confirm or kill it, and get that

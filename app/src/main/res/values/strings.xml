@@ -1,3 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!--
+      Only what XML needs. Everything inside the app is Compose and keeps its
+      text in code; a widget layout and its picker entry cannot.
+    -->
+    <string name="widget_label">Portfolio</string>
+    <string name="widget_empty">Open Eddies</string>
+    <string name="widget_name">Net worth</string>
+    <string name="widget_description">Your portfolio total and how it has moved since the last close.</string>
 </resources>

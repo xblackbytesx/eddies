@@ -4,6 +4,7 @@ import com.eddies.app.data.db.dao.AccountDao
 import com.eddies.app.data.db.dao.TransactionDao
 import com.eddies.app.data.db.entity.AccountEntity
 import com.eddies.app.data.db.entity.TransactionEntity
+import com.eddies.app.domain.LedgerDedup
 import com.eddies.app.domain.Transaction
 import com.eddies.app.domain.TxSource
 import com.eddies.app.domain.TxType
@@ -37,14 +38,17 @@ class TransactionRepository @Inject constructor(
     suspend fun earliestTimestamp(): Long? = dao.earliestTimestamp()
 
     /**
-     * Bulk insert that skips rows already present.
+     * Bulk insert that skips rows already present. Returns how many were added.
      *
-     * Relies on the unique index over (source, externalId): re-running a staking
-     * import cannot double-count an epoch's rewards, which would otherwise
-     * silently inflate the holding every time the user pulled to refresh.
+     * Two guards. [LedgerDedup] matches rows on their content, which is the
+     * only thing a hand-entered row can be recognized by, so restoring a backup
+     * twice adds nothing the second time. The unique index over
+     * (source, externalId) then still refuses anything that slipped past it.
      */
     suspend fun importDeduplicated(txs: List<Transaction>): Int {
-        val ids = dao.insertIgnoringDuplicates(txs.map { it.toEntity() })
+        val fresh = LedgerDedup.newRows(existing = all(), incoming = txs)
+        if (fresh.isEmpty()) return 0
+        val ids = dao.insertIgnoringDuplicates(fresh.map { it.toEntity() })
         return ids.count { it != -1L }
     }
 
@@ -75,6 +79,9 @@ internal fun TransactionEntity.toDomain() = Transaction(
     note = note,
     source = source,
     externalId = externalId,
+    // Every column has to be named in both mappers. This one was missing from
+    // both, so a dividend was saved as no cash at all and read back as zero.
+    cashAmount = cashAmount?.let { runCatching { BigDecimal(it) }.getOrNull() },
 )
 
 internal fun Transaction.toEntity() = TransactionEntity(
@@ -91,6 +98,7 @@ internal fun Transaction.toEntity() = TransactionEntity(
     note = note,
     source = source,
     externalId = externalId,
+    cashAmount = cashAmount?.toPlainString(),
 )
 
 /** Types the user can pick in the add screen, in the order they are offered. */

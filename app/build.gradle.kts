@@ -4,7 +4,6 @@ import java.util.Properties
 
 plugins {
     alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
@@ -18,15 +17,14 @@ val appVersionCode: Int = ((findProperty("appVersionCode") as String?) ?: "1").t
 
 android {
     namespace = "com.eddies.app"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.eddies.app"
         minSdk = 35
-        targetSdk = 36
+        targetSdk = 37
         versionCode = appVersionCode
         versionName = appVersionName
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     /**
@@ -107,17 +105,12 @@ android {
         targetCompatibility = JavaVersion.VERSION_21
     }
 
-    kotlin {
-        compilerOptions { jvmTarget.set(JvmTarget.JVM_21) }
-    }
-
-    ksp {
-        arg("room.schemaLocation", "$projectDir/schemas")
-    }
-
     buildFeatures {
         compose = true
         buildConfig = true
+        // Off by default since AGP 9. The flavours name the app through
+        // resValue, so without this neither has an app_name at all.
+        resValues = true
     }
 
     testOptions {
@@ -151,6 +144,16 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
+}
+
+// Top level, not inside android {}: AGP 9 compiles Kotlin itself and no longer
+// exposes these through the android extension.
+kotlin {
+    compilerOptions { jvmTarget.set(JvmTarget.JVM_21) }
+}
+
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
 }
 
 dependencies {
@@ -193,16 +196,11 @@ dependencies {
     implementation(libs.ktor.serialization.kotlinx.json)
 
     implementation(libs.coil.compose)
-    implementation(libs.coil.network.okhttp)
 
     implementation(libs.tink.android)
     implementation(libs.androidx.biometric)
     implementation(libs.androidx.fragment.ktx)
 
     testImplementation(libs.junit)
-    testImplementation(libs.turbine)
-    testImplementation(libs.kotlinx.coroutines.test)
-    androidTestImplementation(libs.androidx.junit)
-    androidTestImplementation(libs.androidx.espresso.core)
     debugImplementation(libs.androidx.ui.tooling)
 }

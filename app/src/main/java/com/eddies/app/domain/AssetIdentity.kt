@@ -20,14 +20,6 @@ data class Asset(
     val rank: Int? = null,
 )
 
-/** How one source names one asset. Several rows per asset is the normal case. */
-data class AssetSourceRef(
-    val assetId: String,
-    val source: PriceSourceId,
-    val sourceSymbol: String,
-    val quoteCurrency: String? = null,
-)
-
 object AssetIds {
     fun crypto(slug: String): String = "crypto:$slug"
     fun stock(exchange: String, ticker: String): String = "stock:$exchange:$ticker"
@@ -37,51 +29,12 @@ object AssetIds {
     fun exchangeOf(assetId: String): String? =
         assetId.takeIf { it.startsWith("stock:") }?.split(":")?.getOrNull(1)
 
-    /** The instrument segment: a ticker for most venues, an ISIN for Tradegate. */
-    fun tickerOf(assetId: String): String = assetId.substringAfterLast(":")
-
     fun classOf(assetId: String): AssetClass? = when (assetId.substringBefore(":")) {
         "crypto" -> AssetClass.CRYPTO
         "stock" -> AssetClass.STOCK
         "cash" -> AssetClass.CASH
         else -> null
     }
-}
-
-/**
- * Translates between the app's asset ids and the symbols each source uses.
- *
- * This exists because the sources genuinely disagree: Kraken calls Bitcoin XBT,
- * Binance calls it BTC, CoinPaprika calls it btc-bitcoin. Worse, tickers are not
- * unique across assets, so nothing may key on a bare symbol.
- */
-class AssetResolver(refs: List<AssetSourceRef>) {
-
-    private val byAssetAndSource: Map<Pair<String, PriceSourceId>, List<AssetSourceRef>> =
-        refs.groupBy { it.assetId to it.source }
-
-    private val bySourceSymbol: Map<Pair<PriceSourceId, String>, String> =
-        refs.associate { (it.source to it.sourceSymbol.uppercase()) to it.assetId }
-
-    /**
-     * The best symbol for [assetId] on [source], preferring a pair already
-     * quoted in [preferredQuote] so the caller can skip an FX conversion.
-     */
-    fun toSource(assetId: String, source: PriceSourceId, preferredQuote: String? = null): AssetSourceRef? {
-        val candidates = byAssetAndSource[assetId to source].orEmpty()
-        if (candidates.isEmpty()) return null
-        preferredQuote?.let { quote ->
-            candidates.firstOrNull { it.quoteCurrency.equals(quote, ignoreCase = true) }?.let { return it }
-        }
-        return candidates.firstOrNull { it.quoteCurrency == null } ?: candidates.first()
-    }
-
-    /** The asset id a source symbol refers to, or null if the app does not track it. */
-    fun fromSource(source: PriceSourceId, sourceSymbol: String): String? =
-        bySourceSymbol[source to sourceSymbol.uppercase()]
-
-    fun quotesFor(assetId: String, source: PriceSourceId): List<String> =
-        byAssetAndSource[assetId to source].orEmpty().mapNotNull { it.quoteCurrency }
 }
 
 /**

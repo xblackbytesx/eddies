@@ -156,67 +156,81 @@ class PriceRepository @Inject constructor(
         )
 
         val emitMutex = kotlinx.coroutines.sync.Mutex()
+        // Ticks not yet written to disk, newest per asset.
+        val unsaved = HashMap<String, PriceTick>()
         suspend fun publish(tick: PriceTick) {
             emitMutex.withLock {
                 latest[tick.assetId] = tick
+                unsaved[tick.assetId] = tick
                 send(latest.toMap())
             }
+        }
+        suspend fun flush() {
+            val batch = emitMutex.withLock {
+                unsaved.values.toList().also { unsaved.clear() }
+            }
+            persist(batch)
         }
 
         if (realtime != null && liveSymbols.isNotEmpty()) {
             launch {
-                realtime.stream(liveSymbols).collect { tick ->
-                    publish(tick)
-                    persist(tick)
-                }
+                realtime.stream(liveSymbols).collect { tick -> publish(tick) }
             }
         }
         if (pollSymbols.isNotEmpty()) {
             launch {
-                aggregator.stream(pollSymbols).collect { tick ->
-                    publish(tick)
-                    persist(tick)
-                }
+                aggregator.stream(pollSymbols).collect { tick -> publish(tick) }
             }
         }
         if (stockSymbols.isNotEmpty()) {
             launch {
-                stocks.stream(stockSymbols).collect { tick ->
-                    publish(tick)
-                    persist(tick)
-                }
+                stocks.stream(stockSymbols).collect { tick -> publish(tick) }
             }
         }
         if (tradegateSymbols.isNotEmpty()) {
             launch {
-                tradegate.stream(tradegateSymbols).collect { tick ->
-                    publish(tick)
-                    persist(tick)
-                }
+                tradegate.stream(tradegateSymbols).collect { tick -> publish(tick) }
             }
         }
-        awaitClose { }
+        launch {
+            while (true) {
+                kotlinx.coroutines.delay(SAVE_INTERVAL_MS)
+                flush()
+            }
+        }
+        try {
+            awaitClose { }
+        } finally {
+            // The feed closes when the last screen stops collecting, which is
+            // also when the app is on its way to the background. Whatever has
+            // not been written yet is written now, or the next cold start
+            // would open on prices up to half a minute older than the user saw.
+            kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) { flush() }
+        }
     }
 
     /**
-     * Records the latest price as a single upserted row per asset.
+     * Records the latest prices, one upserted row per asset.
      *
-     * Deliberately not append-only. Kraken's ticker fires on every trade, so an
-     * insert per tick is tens of thousands of rows a day for one liquid pair,
-     * plus a database write per tick on a phone. Chart series live in
-     * price_candles and are written by PriceHistoryRepository instead.
+     * These rows exist for one reader: the next cold start, which shows them
+     * until something live arrives. That needs the last price, not every price,
+     * so ticks are collected in memory and written in one batch every
+     * [SAVE_INTERVAL_MS] instead of one encrypted database write per tick.
+     * Chart series live in price_candles and are written by
+     * PriceHistoryRepository instead.
      */
-    private suspend fun persist(tick: PriceTick) {
+    private suspend fun persist(ticks: List<PriceTick>) {
+        if (ticks.isEmpty()) return
         priceDao.upsertLatest(
-            listOf(
+            ticks.map { tick ->
                 PriceLatestEntity(
                     assetId = tick.assetId,
                     timestamp = tick.at,
                     price = tick.price.toPlainString(),
                     currency = tick.currency,
                     source = tick.source,
-                ),
-            ),
+                )
+            },
         )
     }
 
@@ -242,5 +256,8 @@ class PriceRepository @Inject constructor(
          * second while the app sits open.
          */
         const val UPDATE_INTERVAL_MS = 1_000L
+
+        /** How often the latest prices are written to disk while a feed is open. */
+        const val SAVE_INTERVAL_MS = 30_000L
     }
 }

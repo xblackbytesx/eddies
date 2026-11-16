@@ -29,7 +29,7 @@ object NetworkModule {
     @Provides
     @Singleton
     fun provideHttpClient(json: Json): HttpClient = HttpClient(OkHttp) {
-        // We map non-2xx into AppError ourselves rather than having Ktor throw.
+        // Callers check the status themselves rather than having Ktor throw.
         expectSuccess = false
 
         install(ContentNegotiation) { json(json) }

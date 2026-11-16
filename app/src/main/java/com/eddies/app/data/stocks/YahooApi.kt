@@ -6,6 +6,7 @@ import com.eddies.app.data.price.asStringOrNull
 import com.eddies.app.domain.Asset
 import com.eddies.app.domain.AssetClass
 import com.eddies.app.domain.AssetIds
+import com.eddies.app.domain.QuoteCurrency
 import com.eddies.app.domain.SplitEvent
 import io.ktor.client.HttpClient
 import io.ktor.client.request.get
@@ -80,10 +81,13 @@ class YahooApi @Inject constructor(
         val price = meta["regularMarketPrice"].asBigDecimal() ?: return null
         val previous = meta["chartPreviousClose"].asBigDecimal()
             ?: meta["previousClose"].asBigDecimal()
+        // The raw label, never uppercased first: London's "GBp" means pence,
+        // and folding its case is how a holding becomes a hundred times itself.
+        val rawCurrency = meta["currency"].asStringOrNull()
         StockQuote(
             assetId = assetId,
-            price = price,
-            currency = meta["currency"].asStringOrNull()?.uppercase() ?: "USD",
+            price = QuoteCurrency.toMajor(price, rawCurrency),
+            currency = QuoteCurrency.majorCode(rawCurrency),
             changePct = previous?.takeIf { it.signum() != 0 }?.let {
                 (price - it).divide(it, com.eddies.app.domain.MC).toDouble() * 100.0
             },
@@ -127,7 +131,9 @@ class YahooApi @Inject constructor(
                 ?.jsonObject?.get("result") as? JsonArray ?: return null
             val root = result.firstOrNull() as? JsonObject ?: return null
             val meta = root["meta"]?.jsonObject ?: return null
-            val currency = meta["currency"].asStringOrNull()?.uppercase() ?: "USD"
+            val rawCurrency = meta["currency"].asStringOrNull()
+            val currency = QuoteCurrency.majorCode(rawCurrency)
+            fun major(value: BigDecimal?) = value?.let { QuoteCurrency.toMajor(it, rawCurrency) }
 
             val stamps = root["timestamp"] as? JsonArray ?: JsonArray(emptyList())
             val quote = (root["indicators"]?.jsonObject?.get("quote") as? JsonArray)
@@ -141,7 +147,12 @@ class YahooApi @Inject constructor(
                 // A null close is a non-trading gap, not a zero. Charting it as
                 // zero would draw a cliff to the axis on every market holiday.
                 val close = closes?.getOrNull(i).asBigDecimal() ?: return@mapIndexedNotNull null
-                StockBar(ts * 1000, close, highs?.getOrNull(i).asBigDecimal(), lows?.getOrNull(i).asBigDecimal())
+                StockBar(
+                    ts * 1000,
+                    QuoteCurrency.toMajor(close, rawCurrency),
+                    major(highs?.getOrNull(i).asBigDecimal()),
+                    major(lows?.getOrNull(i).asBigDecimal()),
+                )
             }
 
             val splitObj = root["events"]?.jsonObject?.get("splits")?.jsonObject

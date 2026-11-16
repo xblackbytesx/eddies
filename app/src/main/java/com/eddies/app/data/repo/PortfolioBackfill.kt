@@ -1,133 +1,106 @@
 package com.eddies.app.data.repo
 
+import com.eddies.app.data.db.dao.CorporateActionDao
+import com.eddies.app.data.db.dao.PortfolioSnapshotDao
 import com.eddies.app.data.db.entity.CandleInterval
 import com.eddies.app.data.db.entity.PortfolioSnapshotEntity
 import com.eddies.app.data.prefs.SettingsDataStore
+import com.eddies.app.data.price.FxRepository
 import com.eddies.app.data.price.PriceHistoryRepository
-import com.eddies.app.domain.AssetClass
-import com.eddies.app.domain.AssetIds
-import com.eddies.app.domain.CostBasisMethod
-import com.eddies.app.domain.PositionCalculator
-import com.eddies.app.domain.Transaction
+import com.eddies.app.domain.PortfolioHistory
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import java.math.BigDecimal
-import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Fills the portfolio value chart backwards, once.
+ * Rebuilds the portfolio value chart from the ledger and cached daily closes.
  *
- * Why this exists on top of the on-view fetch: the value chart is a sum across
- * every held asset, so history for only the coins the user happened to open
- * would produce a total that is quietly missing the rest. A chart that is
- * confidently wrong is worse than one that is empty.
+ * The arithmetic is [PortfolioHistory], which is pure and tested. This class
+ * only gathers its inputs and stores what it returns.
  *
- * The set is small. It is the coins actually held, not the several hundred in
- * the seed, and each is a single request of roughly 60 to 190 KB.
+ * The history is derived, never recorded. It is replayed in full whenever the
+ * ledger, the splits or the settings it depends on change, so a transaction
+ * added with last year's date moves last year's line, and a deleted one takes
+ * its days off the chart again. Nothing is lost by throwing the rows away: the
+ * closes they are computed from stay cached for good.
  *
- * It reuses the same candle cache as the chart, so a coin already viewed costs a
- * delta rather than a refetch.
+ * It stops at yesterday. Today has no close yet, and the screen draws today's
+ * point from the live total instead, so the end of the line is always the
+ * number at the top of the screen.
  */
 @Singleton
 class PortfolioBackfill @Inject constructor(
     private val transactions: TransactionRepository,
     private val history: PriceHistoryRepository,
-    private val snapshotDao: com.eddies.app.data.db.dao.PortfolioSnapshotDao,
+    private val snapshotDao: PortfolioSnapshotDao,
     private val settings: SettingsDataStore,
-    private val corporateActions: com.eddies.app.data.db.dao.CorporateActionDao,
+    private val corporateActions: CorporateActionDao,
+    private val fx: FxRepository,
 ) {
+    /** One replay at a time: the worker and the screen can both ask for one. */
+    private val running = Mutex()
 
-    /**
-     * Replays the ledger against daily closes and writes one snapshot per day.
-     *
-     * Days before a given asset's history starts simply value that asset at
-     * zero. That is honest for a chart: the alternative, carrying the oldest
-     * known price backwards, invents a flat line that never happened.
-     */
-    suspend fun run(): Int = withContext(Dispatchers.IO) {
-        val txs = transactions.all()
-        if (txs.isEmpty()) return@withContext 0
-
-        val cfg = settings.current()
-        val assetIds = txs.map { it.assetId }.distinct()
-        val firstTx = txs.minOf { it.timestamp }
-
-        // Pull history for everything held, in the same cache the chart uses.
-        for (assetId in assetIds) {
-            runCatching { history.ensureFresh(assetId, CandleInterval.DAY) }
-        }
-
-        val splitsByAsset = corporateActions.all()
-            .groupBy { it.assetId }
-            .mapValues { (_, rows) -> rows.map { it.toDomain() } }
-
-        val closes = history.dailyCloses(assetIds, firstTx)
-        if (closes.isEmpty()) return@withContext 0
-
-        // Per asset, a day-keyed close, so each simulated day is a map lookup.
-        val byAssetDay: Map<String, Map<String, BigDecimal>> = closes.mapValues { (_, rows) ->
-            rows.associate { row ->
-                dayOf(row.timestamp) to (runCatching { BigDecimal(row.close) }.getOrDefault(BigDecimal.ZERO))
+    /** Returns how many rows the rebuilt history holds. */
+    suspend fun run(): Int = running.withLock {
+        withContext(Dispatchers.IO) {
+            val txs = transactions.all()
+            if (txs.isEmpty()) {
+                snapshotDao.deleteAll()
+                return@withContext 0
             }
-        }
 
-        val today = Instant.now()
-        var day = Instant.ofEpochMilli(firstTx)
-        val snapshots = ArrayList<PortfolioSnapshotEntity>()
+            val cfg = settings.current()
+            val assetIds = txs.map { it.assetId }.distinct()
 
-        while (!day.isAfter(today)) {
-            val key = dayOf(day.toEpochMilli())
-            val cutoff = day.toEpochMilli() + DAY_MS - 1
-            // Only what had actually happened by that day.
-            val upToDay = txs.filter { it.timestamp <= cutoff }
+            // The same cache the asset chart uses, so anything already viewed
+            // costs a small delta, and nothing at all when it was fetched
+            // recently. Every held asset, not just the ones somebody opened: a
+            // total built from part of the portfolio is quietly missing the rest.
+            for (assetId in assetIds) {
+                runCatching { history.ensureFresh(assetId, CandleInterval.DAY) }
+            }
 
-            val perClassValue = HashMap<AssetClass, BigDecimal>()
-            val perClassCost = HashMap<AssetClass, BigDecimal>()
-            for ((assetId, assetTxs) in upToDay.groupBy(Transaction::assetId)) {
-                val position = PositionCalculator.fold(
-                    txs = assetTxs,
-                    method = cfg.costBasisMethod,
-                    baseCurrency = cfg.baseCurrency,
-                    includeFeesInBasis = cfg.includeFeesInBasis,
-                    assetId = assetId,
-                    // Without these, a share count before an old split is wrong
-                    // for every day of the replayed history.
-                    splits = splitsByAsset[assetId].orEmpty(),
-                )
-                val assetClass = AssetIds.classOf(assetId) ?: AssetClass.CRYPTO
-                perClassCost[assetClass] = (perClassCost[assetClass] ?: BigDecimal.ZERO) + position.costBasis
-                val close = byAssetDay[assetId]?.get(key)
-                if (close != null) {
-                    perClassValue[assetClass] =
-                        (perClassValue[assetClass] ?: BigDecimal.ZERO) + position.quantity * close
+            val firstTx = txs.minOf { it.timestamp }
+            val zone = ZoneId.systemDefault()
+            val days = PortfolioHistory.build(
+                transactions = txs,
+                // From a little before the first purchase, so one made at a
+                // weekend has the preceding close to be valued at.
+                closes = history.dailyCloses(assetIds, firstTx - LOOKBACK_MS),
+                baseCurrency = cfg.baseCurrency,
+                lastDay = LocalDate.now(zone).minusDays(1),
+                zone = zone,
+                method = cfg.costBasisMethod,
+                fx = fx.historicalTable(),
+                valueFx = fx.chartTable(),
+                includeFeesInBasis = cfg.includeFeesInBasis,
+                splitsByAsset = corporateActions.all()
+                    .groupBy { it.assetId }
+                    .mapValues { (_, rows) -> rows.map { it.toDomain() } },
+            )
+
+            val rows = days.flatMap { day ->
+                day.perClass.map { (assetClass, totals) ->
+                    PortfolioSnapshotEntity(
+                        day = day.day.toString(),
+                        assetClass = assetClass,
+                        totalValue = totals.value.toPlainString(),
+                        costBasis = totals.costBasis.toPlainString(),
+                        currency = cfg.baseCurrency,
+                    )
                 }
             }
-
-            for (assetClass in (perClassValue.keys + perClassCost.keys)) {
-                snapshots += PortfolioSnapshotEntity(
-                    day = key,
-                    assetClass = assetClass,
-                    totalValue = (perClassValue[assetClass] ?: BigDecimal.ZERO).toPlainString(),
-                    costBasis = (perClassCost[assetClass] ?: BigDecimal.ZERO).toPlainString(),
-                    currency = cfg.baseCurrency,
-                )
-            }
-            day = day.plusMillis(DAY_MS)
+            snapshotDao.replaceAll(rows)
+            rows.size
         }
-
-        if (snapshots.isNotEmpty()) snapshotDao.upsert(snapshots)
-        snapshots.size
     }
 
-    private fun dayOf(epochMs: Long): String =
-        DAY_FORMAT.format(Instant.ofEpochMilli(epochMs).atZone(ZoneId.systemDefault()))
-
     private companion object {
-        const val DAY_MS = 86_400_000L
-        val DAY_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
+        const val LOOKBACK_MS = 14 * 86_400_000L
     }
 }

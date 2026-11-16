@@ -2,7 +2,6 @@ package com.eddies.app.core.crypto
 
 import android.content.Context
 import android.util.Base64
-import androidx.core.content.edit
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.security.SecureRandom
 import javax.inject.Inject
@@ -25,22 +24,51 @@ class DatabaseKeyProvider @Inject constructor(
     private val secrets: SecretStore,
 ) {
 
-    /** The passphrase bytes SQLCipher wants. Generated on first call, stable after. */
-    fun passphrase(): ByteArray {
+    /** Thrown instead of replacing a key that could not be read. Nothing has been changed. */
+    class KeyUnavailableException(cause: Throwable?) :
+        IllegalStateException("The database key could not be unsealed. Nothing was changed.", cause)
+
+    /**
+     * The passphrase bytes SQLCipher wants. Generated on first call, stable after.
+     *
+     * [databaseExists] says whether there is a database file this key has to
+     * open. It decides what a failed unseal means.
+     *
+     * A stored key is never replaced while a database depends on it. The sealed
+     * key is the only way into the ledger, and the Keystore does fail
+     * transiently: under memory pressure, straight after boot, during an OS
+     * update. This used to answer any such failure by writing a fresh key over
+     * the old one, which turned a hiccup that the next launch would have
+     * survived into a ledger nobody can ever open again. So it retries, and
+     * then fails loudly with everything left in place. A crash here is
+     * recoverable. An overwritten key is not.
+     *
+     * Only when there is no database at all is a fresh key the right answer,
+     * because then there is nothing for the old one to open.
+     */
+    fun passphrase(databaseExists: Boolean): ByteArray {
         val prefs = context.getSharedPreferences(PREF_FILE, Context.MODE_PRIVATE)
-        prefs.getString(KEY_SEALED, null)?.let { sealed ->
-            runCatching {
-                return secrets.decryptBytes(Base64.decode(sealed, Base64.NO_WRAP))
+        val sealed = prefs.getString(KEY_SEALED, null)
+        if (sealed != null) {
+            var failure: Throwable? = null
+            repeat(ATTEMPTS) { attempt ->
+                try {
+                    return secrets.decryptBytes(Base64.decode(sealed, Base64.NO_WRAP))
+                } catch (e: Exception) {
+                    failure = e
+                    if (attempt < ATTEMPTS - 1) Thread.sleep(RETRY_DELAY_MS * (attempt + 1))
+                }
             }
-            // Falling through means the Keystore key is gone (an OS restore onto
-            // new hardware does this). There is no way back to the old database,
-            // so a fresh key is the only forward path; the caller handles the
-            // unreadable file.
+            if (databaseExists) throw KeyUnavailableException(failure)
         }
         val fresh = ByteArray(KEY_BYTES).also { SecureRandom().nextBytes(it) }
-        prefs.edit {
-            putString(KEY_SEALED, Base64.encodeToString(secrets.encrypt(fresh), Base64.NO_WRAP))
-        }
+        // commit, not apply: the database is created with this key a moment
+        // later, and a key still waiting in a write queue when the process dies
+        // would leave a database with no key at all.
+        val stored = prefs.edit()
+            .putString(KEY_SEALED, Base64.encodeToString(secrets.encrypt(fresh), Base64.NO_WRAP))
+            .commit()
+        check(stored) { "The database key could not be stored." }
         return fresh
     }
 
@@ -48,5 +76,7 @@ class DatabaseKeyProvider @Inject constructor(
         const val PREF_FILE = "eddies_db"
         const val KEY_SEALED = "db_key_sealed"
         const val KEY_BYTES = 32
+        const val ATTEMPTS = 3
+        const val RETRY_DELAY_MS = 150L
     }
 }

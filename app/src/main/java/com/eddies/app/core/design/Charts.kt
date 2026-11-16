@@ -67,46 +67,6 @@ internal fun chartColors(accent: Color = MaterialTheme.colorScheme.primary): Cha
 )
 
 /**
- * A small unlabelled line, for a list row or a summary card.
- * Deliberately has no axes: at this size they would be noise, not information.
- */
-@Composable
-fun Sparkline(
-    points: List<ChartPoint>,
-    modifier: Modifier = Modifier,
-    color: Color = MaterialTheme.colorScheme.primary,
-    height: Dp = 40.dp,
-) {
-    if (points.size < 2) {
-        Box(modifier.fillMaxWidth().height(height))
-        return
-    }
-    val norm = remember(points) { ChartMath.normalise(ChartMath.sample(points, 120)) }
-    val fillTop = color.copy(alpha = 0.22f)
-
-    Canvas(modifier.fillMaxWidth().height(height)) {
-        val path = Path()
-        val fill = Path()
-        norm.forEachIndexed { i, (fx, fy) ->
-            val x = fx * size.width
-            val y = size.height - fy * size.height
-            if (i == 0) {
-                path.moveTo(x, y)
-                fill.moveTo(x, size.height)
-                fill.lineTo(x, y)
-            } else {
-                path.lineTo(x, y)
-                fill.lineTo(x, y)
-            }
-        }
-        fill.lineTo(size.width, size.height)
-        fill.close()
-        drawPath(fill, Brush.verticalGradient(listOf(fillTop, Color.Transparent)))
-        drawPath(path, color, style = Stroke(width = 2.dp.toPx()))
-    }
-}
-
-/**
  * The full chart: gridlines, axis labels, gradient fill, animated reveal and a
  * touch scrubber with a floating value label.
  */

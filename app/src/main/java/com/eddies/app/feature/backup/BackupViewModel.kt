@@ -6,6 +6,9 @@ import com.eddies.app.core.backup.BackupCrypto
 import com.eddies.app.data.backup.BackupManager
 import com.eddies.app.data.backup.BackupManifest
 import com.eddies.app.data.backup.BackupOptions
+import com.eddies.app.data.backup.BrokerCsv
+import com.eddies.app.data.backup.BrokerImportResult
+import com.eddies.app.data.backup.BrokerImporter
 import com.eddies.app.data.backup.CsvExchange
 import com.eddies.app.data.db.dao.AssetDao
 import com.eddies.app.data.prefs.SettingsDataStore
@@ -44,6 +47,7 @@ class BackupViewModel @Inject constructor(
     private val transactions: TransactionRepository,
     private val assetDao: AssetDao,
     private val settings: SettingsDataStore,
+    private val brokerImporter: BrokerImporter,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(BackupUiState())
@@ -130,9 +134,24 @@ class BackupViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Imports a CSV, whichever kind it is.
+     *
+     * A broker's own export is recognized by its header and read as that
+     * broker writes it. Anything else is taken to be this app's format.
+     */
     fun importCsv(content: String) {
-        _state.update { it.copy(busy = true) }
+        _state.update { it.copy(busy = true, error = null, message = null) }
         viewModelScope.launch {
+            val broker = BrokerCsv.parse(content)
+            if (broker != null) {
+                runCatching { brokerImporter.import(broker, transactions.defaultAccountId()) }
+                    .onSuccess { result -> _state.update { it.copy(busy = false, message = describe(result)) } }
+                    .onFailure { e ->
+                        _state.update { it.copy(busy = false, error = e.message ?: "Could not import that file.") }
+                    }
+                return@launch
+            }
             val result = CsvExchange.import(content, settings.current().baseCurrency)
             if (result.transactions.isEmpty()) {
                 _state.update {
@@ -149,10 +168,24 @@ class BackupViewModel @Inject constructor(
                     busy = false,
                     message = buildString {
                         append("Imported $imported transactions.")
+                        val held = result.transactions.size - imported
+                        if (held > 0) append(" $held were already in your ledger.")
                         if (result.skipped > 0) append(" Skipped ${result.skipped} unreadable rows.")
                     },
                 )
             }
+        }
+    }
+
+    private fun describe(result: BrokerImportResult): String = buildString {
+        append("${result.broker.label} export: imported ${result.imported} transactions.")
+        if (result.alreadyHeld > 0) append(" ${result.alreadyHeld} were already in your ledger.")
+        if (result.unreadable > 0) append(" ${result.unreadable} rows could not be read.")
+        if (result.unresolved.isNotEmpty()) {
+            append(" Not recognized, so left out: ")
+            append(result.unresolved.entries.take(5).joinToString(", ") { (name, rows) -> "$name ($rows)" })
+            if (result.unresolved.size > 5) append(" and ${result.unresolved.size - 5} more")
+            append(".")
         }
     }
 }

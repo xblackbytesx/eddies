@@ -303,10 +303,9 @@ fun EddiesNavHost(
 /**
  * The bottom navigation, as a floating pill rather than a full-width bar.
  *
- * `HorizontalFloatingToolbar` is a real Material 3 component, but only in
- * material3 1.5.0-alpha18: 1.4.0 stable ships its design tokens and not the
- * composable. That alpha is why the version catalog overrides the Compose BOM
- * for material3 alone, and why this lives on its own branch.
+ * `HorizontalFloatingToolbar` is a real Material 3 component, but only from
+ * material3 1.5.0: 1.4.0 stable ships its design tokens and not the composable.
+ * That is why the version catalog overrides the Compose BOM for material3 alone.
  *
  * Selected tab shows its label, the others are icon only. Four labels do not fit
  * a pill at any readable size, and a pill of four unlabelled icons is a guessing
@@ -333,7 +332,7 @@ private fun FloatingNavPill(
     modifier: Modifier = Modifier,
 ) {
     val scheme = MaterialTheme.colorScheme
-    val itemColors = ToggleButtonDefaults.toggleButtonColors(
+    val itemColors = ToggleButtonDefaults.colors(
         containerColor = Color.Transparent,
         contentColor = scheme.onSurfaceVariant,
         // A wash rather than a fill. Cyan at full strength on this background
@@ -360,14 +359,10 @@ private fun FloatingNavPill(
     // Passing `scrollBehavior` to the component applies the offset inside its
     // own layout, which is inside everything in the modifier chain below. The
     // container slid away on scroll and the border stayed behind, drawing an
-    // empty outline where the pill used to be. `floatingScrollBehavior` is
-    // public for exactly this: put it above the border and the rim travels with
-    // the thing it is tracing.
-    val exitOffset = if (scrollBehavior != null) {
-        with(scrollBehavior) { Modifier.floatingScrollBehavior() }
-    } else {
-        Modifier
-    }
+    // empty outline where the pill used to be.
+    // `floatingScrollBehaviorModifier` is public for exactly this: put it above
+    // the border and the rim travels with the thing it is tracing.
+    val exitOffset = scrollBehavior?.floatingScrollBehaviorModifier ?: Modifier
 
     HorizontalFloatingToolbar(
         // Always expanded: this is navigation, not a contextual toolbar, and it

@@ -12,6 +12,9 @@ import com.eddies.app.core.design.EddiesTheme
 import com.eddies.app.core.ui.WindowSecurityPolicy
 import com.eddies.app.navigation.EddiesNavHost
 import com.eddies.app.navigation.RootViewModel
+import com.eddies.app.widget.WidgetUpdater
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 import androidx.activity.viewModels
@@ -22,6 +25,8 @@ class MainActivity : FragmentActivity() {
     private val rootViewModel: RootViewModel by viewModels()
 
     @Inject lateinit var windowSecurity: WindowSecurityPolicy
+
+    @Inject lateinit var widget: WidgetUpdater
 
     override fun onCreate(savedInstanceState: Bundle?) {
         val splash = installSplashScreen()
@@ -54,6 +59,11 @@ class MainActivity : FragmentActivity() {
     override fun onStop() {
         super.onStop()
         rootViewModel.onBackgrounded()
+        // Leaving the app is when the widget is next looked at, and the prices
+        // are still live for a few seconds. Costs nothing when there is none.
+        if (widget.hasWidgets()) {
+            lifecycleScope.launch { runCatching { widget.refresh(liveWaitMs = 3_000L) } }
+        }
     }
 
     private fun applySecureFlag(secure: Boolean) {

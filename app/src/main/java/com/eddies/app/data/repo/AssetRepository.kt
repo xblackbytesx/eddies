@@ -179,6 +179,40 @@ class AssetRepository @Inject constructor(
     suspend fun setTracked(assetId: String, tracked: Boolean) = assetDao.setTracked(assetId, tracked)
 
     /**
+     * The coin a bare ticker most likely means, from the bundled seed only.
+     *
+     * Tickers are not unique, so this takes the exact match with the highest
+     * market cap rank, which is how the search screen orders them too. It never
+     * goes online: a broker file names coins the exchange lists, and those are
+     * in the seed.
+     */
+    suspend fun coinBySymbol(symbol: String): Asset? {
+        val wanted = symbol.trim().uppercase()
+        if (wanted.isEmpty()) return null
+        return assetDao.search(wanted, limit = 20)
+            .firstOrNull { it.assetClass == AssetClass.CRYPTO && it.symbol.uppercase() == wanted }
+            ?.toDomain()
+    }
+
+    /**
+     * The listing an ISIN resolves to, stored so the ledger can refer to it.
+     *
+     * Goes online, like every share lookup. An ISIN already held through
+     * Tradegate keeps the asset it was added as, for the reason spelled out in
+     * [resolveTradegate]: one instrument must stay one holding.
+     */
+    suspend fun shareByIsin(rawIsin: String): Asset? {
+        val isin = Isin.normalise(rawIsin)
+        if (!Isin.isValid(isin)) return null
+        runCatching { sourceRefDao.assetForSource(PriceSourceId.TRADEGATE, isin) }.getOrNull()
+            ?.let { held -> assetDao.byId(held)?.let { return it.toDomain() } }
+        val match = runCatching { yahoo.search(isin, limit = 1) }.getOrNull()?.firstOrNull() ?: return null
+        assetDao.byId(match.id)?.let { return it.toDomain() }
+        assetDao.upsert(match.toEntity(tracked = true))
+        return match
+    }
+
+    /**
      * Display precision. Not the chain's real decimal count, which is 18 for most
      * tokens and unreadable: this is how many places a balance is shown to.
      */

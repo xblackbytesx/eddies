@@ -113,8 +113,9 @@ object CsvExchange {
                     ?: System.currentTimeMillis(),
                 note = cell("note"),
                 source = TxSource.IMPORT_CSV,
-                // No externalId: a hand-edited CSV has no stable identity, so
-                // re-importing the same file legitimately adds the rows again.
+                // No externalId: a hand-edited CSV has no stable identity. Rows
+                // already in the ledger are recognized by content instead, see
+                // LedgerDedup, so importing the same file twice adds nothing.
                 externalId = null,
             )
         }

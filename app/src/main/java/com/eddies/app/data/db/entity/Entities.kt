@@ -164,9 +164,9 @@ data class FxRateEntity(
 /**
  * One row per day per asset class.
  *
- * The value chart cannot be drawn from the ledger alone: it needs a historical
- * price for every held asset back to the first purchase. Snapshotting forward is
- * cheap, exact, and keeps working when a price API goes away.
+ * Derived, not recorded: PortfolioBackfill replays the ledger against cached
+ * daily closes and replaces these rows wholesale, so they are safe to drop. They
+ * are stored at all so the chart draws instantly instead of after a replay.
  *
  * Keyed by class as well as day so crypto, stocks and the combined total are all
  * chartable from one table. Storing only a combined figure would make the

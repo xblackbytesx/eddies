@@ -13,11 +13,16 @@ import com.eddies.app.domain.PortfolioScope
 import com.eddies.app.domain.PortfolioSummary
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -74,12 +79,13 @@ data class PortfolioUiState(
     val showScopeSelector: Boolean get() = summary.isMixed
 }
 
-@OptIn(ExperimentalCoroutinesApi::class)
+@OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
 @HiltViewModel
 class PortfolioViewModel @Inject constructor(
     private val portfolio: PortfolioRepository,
     private val settings: SettingsDataStore,
     private val backfill: PortfolioBackfill,
+    private val intraday: com.eddies.app.data.repo.PortfolioIntraday,
     private val fx: com.eddies.app.data.price.FxRepository,
     val icons: IconResolver,
 ) : ViewModel() {
@@ -88,8 +94,30 @@ class PortfolioViewModel @Inject constructor(
     private val scrubbed = MutableStateFlow<ChartPoint?>(null)
     private val scope = MutableStateFlow(PortfolioScope.ALL)
 
-    private val history = combine(range, scope) { r, s -> r to s }
-        .flatMapLatest { (r, s) -> portfolio.history(r.days, s) }
+    /**
+     * The chart's past, up to but not including now.
+     *
+     * 1D and 1W are replayed by the hour on request. Everything longer reads
+     * the stored daily history. Until an hourly replay answers, the line that
+     * was already on screen stays there, which is better than a blank chart.
+     */
+    private val history: kotlinx.coroutines.flow.Flow<List<ChartPoint>> =
+        combine(range, scope) { r, s -> r to s }.flatMapLatest { (r, s) ->
+            if (r.intraday) {
+                portfolio.historyInputs.mapLatest {
+                    runCatching { intraday.points(r.days) }.getOrDefault(emptyList()).mapNotNull { point ->
+                        val value = s.assetClass
+                            ?.let { point.perClass[it]?.value }
+                            ?: point.value.takeIf { s.assetClass == null }
+                        value?.let { ChartPoint(point.at, it.toDouble()) }
+                    }
+                }
+            } else {
+                portfolio.history(r.days, s).map { points ->
+                    points.map { ChartPoint(it.day.dayToEpoch(), it.value.toDouble()) }
+                }
+            }
+        }
 
     val state: StateFlow<PortfolioUiState> = combine(
         portfolio.summary,
@@ -101,7 +129,7 @@ class PortfolioViewModel @Inject constructor(
     ) { summary, points, cfg, (r, s), (scrub, converter) ->
         PortfolioUiState(
             summary = summary,
-            history = points.map { ChartPoint(it.day.dayToEpoch(), it.value.toDouble()) },
+            history = points + listOfNotNull(livePoint(holdingsFor(summary, s), r)),
             range = r,
             scope = s,
             secondaryTotal = converter
@@ -121,22 +149,20 @@ class PortfolioViewModel @Inject constructor(
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), PortfolioUiState())
 
-    private var backfillTried = false
-
-    /**
-     * Runs once per process when there are holdings but no history yet.
-     *
-     * Without this a fresh install shows an empty chart until WorkManager gets
-     * around to the first daily run, which is exactly when someone is most
-     * likely to be looking at it.
-     */
-    fun backfillIfEmpty() {
-        if (backfillTried) return
-        backfillTried = true
+    init {
+        // Replays the value chart whenever something it is built from changes,
+        // and once on arrival so it reaches yesterday without waiting for the
+        // daily worker.
+        //
+        // It used to run only when the chart was empty. A transaction added
+        // with a past date then changed the holdings and left the line exactly
+        // as it was until the next day, which is the moment someone is looking
+        // straight at it. The debounce is for a CSV import, which is one edit
+        // to the user and several hundred to the database.
         viewModelScope.launch {
-            val s = state.value
-            if (s.summary.holdings.isEmpty() || s.history.size >= 2) return@launch
-            runCatching { backfill.run() }
+            portfolio.historyInputs
+                .debounce(REPLAY_DEBOUNCE_MS)
+                .collectLatest { runCatching { backfill.run() } }
         }
     }
 
@@ -169,11 +195,8 @@ class PortfolioViewModel @Inject constructor(
         }
     }
 
-    /** Records today's total so the value chart has a point for today. */
-    fun snapshotNow() {
-        viewModelScope.launch {
-            runCatching { portfolio.snapshotToday(state.value.summary) }
-        }
+    private companion object {
+        const val REPLAY_DEBOUNCE_MS = 400L
     }
 }
 
@@ -194,3 +217,24 @@ private fun holdingsFor(
     summary: com.eddies.app.domain.PortfolioSummary,
     scope: PortfolioScope,
 ) = summary.holdings.filter { scope.matches(it.asset.id) }
+
+/**
+ * Today's point on the value chart, taken from the live total.
+ *
+ * The stored history stops at yesterday, because today has no close yet. Using
+ * the same holdings the headline figure is summed from means the end of the
+ * line and the number above it are one number, which they were not while
+ * today's point came from whichever candles happened to exist that morning.
+ *
+ * Null while any held position is still waiting for a price: a total that is
+ * missing a holding would draw a dip that closes itself a second later.
+ */
+private fun livePoint(holdings: List<Holding>, range: ChartRange): ChartPoint? {
+    val held = holdings.filter { it.totalQuantity.signum() > 0 }
+    if (held.isEmpty() || held.any { !it.hasPrice }) return null
+    // On an hourly chart the live point is this moment, not midnight, or it
+    // would sit to the left of hours that have already been drawn.
+    val at = if (range.intraday) System.currentTimeMillis()
+    else java.time.LocalDate.now().toString().dayToEpoch()
+    return ChartPoint(at, held.sumOf { it.marketValue }.toDouble())
+}

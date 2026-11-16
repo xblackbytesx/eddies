@@ -82,6 +82,27 @@ class BackupCryptoTest {
     }
 
     @Test
+    fun `a version 1 file written by an older build still opens`() {
+        // Version 1 used fewer key derivation rounds. Raising the count must
+        // never cost anyone a backup they already made.
+        val old = BackupCrypto.encrypt(payload, passphrase, version = 1)
+        assertEquals(1, old[4].toInt())
+        assertArrayEquals(payload, BackupCrypto.decrypt(old, passphrase))
+    }
+
+    @Test
+    fun `the version byte decides the key, so relabeling a file does not open it`() {
+        val relabeled = BackupCrypto.encrypt(payload, passphrase, version = 1).copyOf()
+        relabeled[4] = 2
+        try {
+            BackupCrypto.decrypt(relabeled, passphrase)
+            error("expected BadPassphraseException")
+        } catch (e: BackupCrypto.BadPassphraseException) {
+            assertTrue(e.message != null)
+        }
+    }
+
+    @Test
     fun `the envelope layout is exactly the documented one`() {
         // MAGIC(4) + version(1) + salt(16) + iv(12) = 33 bytes of header. If this
         // changes, every backup already on a user's disk stops opening.
@@ -90,7 +111,7 @@ class BackupCryptoTest {
         assertEquals('D'.code.toByte(), sealed[1])
         assertEquals('D'.code.toByte(), sealed[2])
         assertEquals('Y'.code.toByte(), sealed[3])
-        assertEquals(1, sealed[4].toInt())
+        assertEquals(2, sealed[4].toInt())
         // An empty payload still carries the 16-byte GCM tag.
         assertEquals(33 + 16, sealed.size)
     }

@@ -35,6 +35,22 @@
         </activity>
 
         <!--
+          The net worth widget. Exported because the launcher, another app, is
+          what sends it its updates. It reads nothing from the intent.
+        -->
+        <receiver
+            android:name=".widget.NetWorthWidget"
+            android:exported="true"
+            android:label="@string/widget_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/net_worth_widget_info" />
+        </receiver>
+
+        <!--
           WorkManager's default initializer is removed so Hilt can supply the
           worker factory instead. Without this the @HiltWorker classes fail to
           construct at runtime with no compile-time warning.

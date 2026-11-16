@@ -88,13 +88,6 @@ class ChartMathTest {
     }
 
     @Test
-    fun `grid values span the padded bounds`() {
-        val grid = ChartMath.gridValues(0.0, 100.0, 3)
-        assertEquals(3, grid.size)
-        assertTrue(grid[0] < grid[1] && grid[1] < grid[2])
-    }
-
-    @Test
     fun `percent change guards a zero baseline`() {
         assertEquals(null, ChartMath.percentChange(0.0, 10.0))
         assertEquals(100.0, ChartMath.percentChange(10.0, 20.0)!!, 0.0001)

@@ -18,6 +18,8 @@ data class BackupPayload(
     val transactions: List<BackupTransaction> = emptyList(),
     val custody: List<BackupCustody> = emptyList(),
     val splits: List<BackupSplit> = emptyList(),
+    val sourceRefs: List<BackupSourceRef> = emptyList(),
+    val watchlist: List<String> = emptyList(),
 ) {
     companion object {
         const val CURRENT_VERSION = 1
@@ -130,4 +132,20 @@ data class BackupSplit(
     val timestamp: Long,
     val numerator: String,
     val denominator: String,
+)
+
+/**
+ * Which venue prices an asset, and under what symbol.
+ *
+ * In the backup because it is a choice the user made, not something the app
+ * can work out again. A share bought at Tradegate is priced from Tradegate
+ * through one of these rows; without it a restored holding quietly falls back
+ * to another exchange's price for the same instrument.
+ */
+@Serializable
+data class BackupSourceRef(
+    val assetId: String,
+    val source: String,
+    val sourceSymbol: String,
+    val quoteCurrency: String? = null,
 )

@@ -15,10 +15,10 @@ jobs:
       # tooling than `make test` is not testing the thing that ships. The runner
       # image ships its own SDK at /usr/local/lib/android/sdk; we ignore it for
       # exactly that reason.
-      CMDLINE_TOOLS_VERSION: "11076708"
-      ANDROID_PLATFORM: android-36
-      BUILD_TOOLS_VERSION: "36.0.0"
-      GRADLE_VERSION: "8.13"
+      CMDLINE_TOOLS_VERSION: "16111833"
+      ANDROID_PLATFORM: android-37.0
+      BUILD_TOOLS_VERSION: "37.0.0"
+      GRADLE_VERSION: "9.8.0"
       ANDROID_HOME: /opt/android-sdk
       # The runner image exports ANDROID_SDK_ROOT pointing at its own preinstalled
       # SDK. AGP reads both variables and hard-fails when they disagree, so this

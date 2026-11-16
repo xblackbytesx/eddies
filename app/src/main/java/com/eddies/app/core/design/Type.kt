@@ -1,10 +1,7 @@
 package com.eddies.app.core.design
 
 import androidx.compose.material3.Typography
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.sp
 
 /**
@@ -23,14 +20,3 @@ val EddiesTypography: Typography = Typography().let { base ->
         labelLarge = base.labelLarge.copy(fontWeight = FontWeight.Medium),
     )
 }
-
-/**
- * Monospace figures for anything in a column that has to line up: balances,
- * prices, quantities. Proportional digits make a list of numbers ragged and
- * genuinely harder to compare down the column.
- */
-val NumericStyle: TextStyle = TextStyle(
-    fontFamily = FontFamily.Monospace,
-    fontFeatureSettings = "tnum",
-    textAlign = TextAlign.End,
-)

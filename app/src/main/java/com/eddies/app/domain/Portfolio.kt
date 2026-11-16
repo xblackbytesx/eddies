@@ -61,11 +61,6 @@ data class Holding(
     val hasPendingStaking: Boolean = stakingPending.signum() > 0
     val hasPrice: Boolean = price != null
     val isStale: Boolean = price?.stale ?: true
-
-    /** Percentage return on cost, null when there is no cost to return on. */
-    val unrealizedPnlPct: Double?
-        get() = if (position.costBasis.signum() == 0) null
-        else unrealizedPnl.divide(position.costBasis, MC).toDouble() * 100.0
 }
 
 /** The whole portfolio, priced, in one currency. */
@@ -80,10 +75,6 @@ data class PortfolioSummary(
     /** True when any priced holding is running on a cached number. */
     val anyStale: Boolean,
 ) {
-    val totalPnlPct: Double?
-        get() = if (totalCostBasis.signum() == 0) null
-        else totalUnrealizedPnl.divide(totalCostBasis, MC).toDouble() * 100.0
-
     /** Share of total value per holding, for the allocation chart. */
     fun allocation(): List<Pair<Holding, Double>> {
         if (totalValue.signum() == 0) return holdings.map { it to 0.0 }
@@ -166,8 +157,11 @@ object PortfolioBuilder {
                 splits = splitsByAsset[assetId].orEmpty(),
             )
             val price = prices[assetId]?.let { tick ->
-                if (tick.currency == currency) tick
-                else fx.rate(tick.currency, currency, tick.at)
+                // An exchange that quotes against USDT has no fiat rate to
+                // convert with, and the holding used to show no value at all.
+                val quoted = QuoteCurrency.fiatOf(tick.currency)
+                if (quoted == currency) tick.copy(currency = currency)
+                else fx.rate(quoted, currency, tick.at)
                     ?.let { tick.copy(price = tick.price * it, currency = currency) }
             }
             Holding(
