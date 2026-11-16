@@ -215,6 +215,126 @@ class BrokerCsvTest {
         assertTrue(BrokerCsv.parse(csv)!!.rows.isEmpty())
     }
 
+    // ---- Trade Republic ---------------------------------------------------
+
+    private val trHeader = listOf(
+        "datetime", "date", "account_type", "category", "type", "asset_class", "name", "symbol", "shares",
+        "price", "amount", "fee", "tax", "currency", "original_amount", "original_currency", "fx_rate",
+        "description", "transaction_id", "counterparty_name", "counterparty_iban", "payment_reference", "mcc_code",
+    )
+
+    /** One export row, every field quoted as the real file quotes them. */
+    private fun tr(vararg values: Pair<String, String>, delimiter: String = ","): String {
+        val byName = values.toMap()
+        return trHeader.joinToString(delimiter) { "\"" + byName[it].orEmpty() + "\"" }
+    }
+
+    private fun trFile(vararg rows: String, delimiter: String = ",") =
+        (listOf(trHeader.joinToString(delimiter) { "\"$it\"" }) + rows).joinToString("\r\n")
+
+    private val trBuy = tr(
+        "datetime" to "2025-01-06T10:00:00.000000Z", "date" to "2025-01-06", "account_type" to "DEFAULT",
+        "category" to "TRADING", "type" to "BUY", "asset_class" to "STOCK", "name" to "Acme Corp",
+        "symbol" to "DE0000000001", "shares" to "10.0000000000", "price" to "50.0000000000",
+        "amount" to "-500.00", "fee" to "-1.00", "currency" to "EUR",
+        "description" to "Buy trade DE0000000001 ACME CORP, quantity: 10", "transaction_id" to "id-3",
+    )
+
+    @Test
+    fun `a trade republic export keeps trades and dividends and passes over the bank account`() {
+        val csv = trFile(
+            tr("datetime" to "2025-01-02T09:00:00.000Z", "category" to "CASH", "type" to "CUSTOMER_INPAYMENT",
+                "amount" to "1000.00", "currency" to "EUR", "transaction_id" to "id-1"),
+            trBuy,
+            tr("datetime" to "2025-03-14T10:00:00.000000Z", "category" to "CASH", "type" to "DIVIDEND",
+                "asset_class" to "STOCK", "name" to "Example Inc", "symbol" to "US0000000003",
+                "shares" to "20.0000000000", "amount" to "12.000000", "tax" to "-3.17", "currency" to "EUR",
+                "original_amount" to "13.00", "original_currency" to "USD", "transaction_id" to "id-12"),
+            tr("datetime" to "2025-05-05T10:00:00.000000Z", "category" to "TRADING", "type" to "SELL",
+                "asset_class" to "STOCK", "name" to "Acme Corp", "symbol" to "DE0000000001",
+                "shares" to "-6.0000000000", "price" to "60.0000000000", "amount" to "360.00",
+                "fee" to "-1.00", "tax" to "-2.37", "currency" to "EUR", "transaction_id" to "id-17"),
+            tr("datetime" to "2025-08-20T15:00:04.759491Z", "category" to "CASH",
+                "type" to "CARD_TRANSACTION_INTERNATIONAL", "name" to "A SHOP, SOMEWHERE", "amount" to "-53.060000",
+                "fee" to "-1.00", "currency" to "EUR", "transaction_id" to "id-20", "mcc_code" to "6011"),
+        )
+        val parsed = BrokerCsv.parse(csv)!!
+        assertEquals(Broker.TRADE_REPUBLIC, parsed.broker)
+        assertEquals(0, parsed.skipped)
+        assertEquals(listOf(TxType.BUY, TxType.DIVIDEND, TxType.SELL), parsed.rows.map { it.type })
+
+        val buy = parsed.rows[0]
+        assertEquals(AssetClass.STOCK, buy.assetClass)
+        assertEquals("DE0000000001", buy.isin)
+        assertNum("10", buy.quantity)
+        assertNum("50", buy.pricePerUnit)
+        assertNum("1", buy.fee)
+        assertEquals("EUR", buy.currency)
+        assertEquals(utc(2025, 1, 6, 10, 0), buy.timestamp)
+        assertEquals("traderepublic:id-3", buy.externalId)
+
+        // A dividend is what arrived: 12.00 gross less 3.17 withheld.
+        val dividend = parsed.rows[1]
+        assertEquals("US0000000003", dividend.isin)
+        assertNum("0", dividend.quantity)
+        assertNum("8.83", dividend.cashAmount)
+
+        // The side comes from the type, so a negative share count is a magnitude.
+        assertNum("6", parsed.rows[2].quantity)
+        assertNum("60", parsed.rows[2].pricePerUnit)
+    }
+
+    @Test
+    fun `the semicolon variant of the trade republic export reads the same`() {
+        val row = tr(
+            "datetime" to "2025-01-06T10:00:00.000000Z", "category" to "TRADING", "type" to "BUY",
+            "asset_class" to "FUND", "symbol" to "IE0000000002", "shares" to "1.2345670000",
+            "price" to "81.0000000000", "amount" to "-100.00", "currency" to "EUR", "transaction_id" to "id-5",
+            delimiter = ";",
+        )
+        val parsed = BrokerCsv.parse(trFile(row, delimiter = ";"))!!
+        assertEquals(Broker.TRADE_REPUBLIC, parsed.broker)
+        assertNum("1.234567", parsed.rows.single().quantity)
+    }
+
+    @Test
+    fun `trade republic crypto is named by ticker and a coin received is a transfer in`() {
+        val csv = trFile(
+            tr("datetime" to "2026-01-19T13:31:47.160Z", "category" to "DELIVERY", "type" to "FREE_RECEIPT",
+                "asset_class" to "CRYPTO", "name" to "Ethereum", "symbol" to "ETH", "shares" to "0.0004910000",
+                "price" to "2756.9800000000", "currency" to "EUR", "transaction_id" to "id-9"),
+        )
+        val row = BrokerCsv.parse(csv)!!.rows.single()
+        assertEquals(AssetClass.CRYPTO, row.assetClass)
+        assertEquals(TxType.TRANSFER_IN, row.type)
+        assertEquals("ETH", row.symbol)
+        assertNull(row.isin)
+        assertNum("0.000491", row.quantity)
+    }
+
+    @Test
+    fun `a missing price is worked out from the amount`() {
+        val csv = trFile(
+            tr("datetime" to "2025-01-06T10:00:00Z", "category" to "TRADING", "type" to "BUY",
+                "asset_class" to "STOCK", "symbol" to "DE0000000001", "shares" to "4",
+                "amount" to "-500.00", "currency" to "EUR", "transaction_id" to "id-30"),
+        )
+        assertNum("125", BrokerCsv.parse(csv)!!.rows.single().pricePerUnit)
+    }
+
+    @Test
+    fun `a dividend correction is reported, not imported as income`() {
+        val csv = trFile(
+            tr("datetime" to "2025-03-15T10:00:00Z", "category" to "CASH", "type" to "DIVIDEND",
+                "asset_class" to "STOCK", "symbol" to "US0000000003", "amount" to "-12.000000", "tax" to "3.17",
+                "currency" to "EUR", "transaction_id" to "id-13"),
+        )
+        val parsed = BrokerCsv.parse(csv)!!
+        assertTrue(parsed.rows.isEmpty())
+        assertEquals(1, parsed.skipped)
+        assertTrue(parsed.errors.single().contains("correction"))
+    }
+
     // ---- numbers ---------------------------------------------------------
 
     @Test

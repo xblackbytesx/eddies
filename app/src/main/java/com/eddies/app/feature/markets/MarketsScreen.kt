@@ -1,5 +1,7 @@
 package com.eddies.app.feature.markets
 
+import com.eddies.app.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -51,7 +53,15 @@ fun MarketsScreen(
                 FilterChip(
                     selected = scope == state.searchScope,
                     onClick = { viewModel.setSearchScope(scope) },
-                    label = { Text(scope.label) },
+                    label = {
+                        Text(
+                            when (scope) {
+                                SearchScope.COINS -> stringResource(R.string.markets_coins)
+                                SearchScope.STOCKS -> stringResource(R.string.class_stocks)
+                                SearchScope.TRADEGATE -> "Tradegate"
+                            },
+                        )
+                    },
                 )
             }
         }
@@ -62,9 +72,9 @@ fun MarketsScreen(
             placeholder = {
                 Text(
                     when (state.searchScope) {
-                        SearchScope.COINS -> "Search coins"
-                        SearchScope.STOCKS -> "Search shares, ETFs, funds"
-                        SearchScope.TRADEGATE -> "Paste an ISIN, e.g. NL0010273215"
+                        SearchScope.COINS -> stringResource(R.string.markets_search_coins)
+                        SearchScope.STOCKS -> stringResource(R.string.markets_search_stocks)
+                        SearchScope.TRADEGATE -> stringResource(R.string.markets_search_isin)
                     },
                 )
             },
@@ -92,13 +102,13 @@ fun MarketsScreen(
             EmptyHint(
                 when {
                     state.searchScope == SearchScope.TRADEGATE ->
-                        "Tradegate is keyed by ISIN, not by ticker. Your broker statement lists them."
+                        stringResource(R.string.markets_hint_tradegate)
                     state.searchScope == SearchScope.STOCKS && state.query.isBlank() ->
-                        "Search for a share, ETF or fund. Amsterdam and New York listings are separate."
+                        stringResource(R.string.markets_hint_stocks)
                     state.searchScope == SearchScope.STOCKS ->
-                        "Nothing found. Try the ticker, for example ASML.AS for Amsterdam."
-                    state.query.isBlank() -> "Search for a coin to see its price."
-                    else -> "Nothing found offline. Enable remote lookup in Settings to search the full list."
+                        stringResource(R.string.markets_none_stocks)
+                    state.query.isBlank() -> stringResource(R.string.markets_hint_coins)
+                    else -> stringResource(R.string.markets_none_coins)
                 },
             )
         } else {

@@ -206,10 +206,10 @@ data class ClassTotals(
 }
 
 /** Which slice of the portfolio a screen is showing. */
-enum class PortfolioScope(val label: String) {
-    ALL("Everything"),
-    CRYPTO("Crypto"),
-    STOCKS("Stocks"),
+enum class PortfolioScope {
+    ALL,
+    CRYPTO,
+    STOCKS,
     ;
 
     fun matches(assetId: String): Boolean = when (this) {

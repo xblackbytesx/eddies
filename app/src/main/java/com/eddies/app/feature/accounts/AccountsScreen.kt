@@ -1,5 +1,7 @@
 package com.eddies.app.feature.accounts
 
+import com.eddies.app.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -38,6 +40,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import com.eddies.app.core.ui.Strings
 import javax.inject.Inject
 
 data class AccountsUiState(
@@ -53,6 +56,7 @@ data class AccountsUiState(
 class AccountsViewModel @Inject constructor(
     private val dao: AccountDao,
     private val staking: StakingRepository,
+    private val strings: Strings,
 ) : ViewModel() {
 
     private val nameDraft = MutableStateFlow("")
@@ -78,8 +82,8 @@ class AccountsViewModel @Inject constructor(
         viewModelScope.launch {
             val updated = runCatching { staking.syncAll() }.getOrDefault(0)
             syncing.value = false
-            message.value = if (updated > 0) "Updated $updated staking address(es)."
-            else "Nothing to refresh, or the chain could not be reached."
+            message.value = if (updated > 0) strings.plural(R.plurals.msg_staking_updated, updated)
+            else strings(R.string.msg_staking_none)
         }
     }
 
@@ -119,9 +123,9 @@ fun AccountsScreen(
     ) {
         Spacer(Modifier.size(4.dp))
 
-        Section("Your accounts") {
+        Section(stringResource(R.string.accounts_yours)) {
             if (state.accounts.isEmpty()) {
-                EmptyHint("No accounts yet. One called Main is created automatically when you add a position.")
+                EmptyHint(stringResource(R.string.accounts_empty))
             } else {
                 state.accounts.forEachIndexed { i, account ->
                     if (i > 0) HorizontalDivider()
@@ -129,9 +133,9 @@ fun AccountsScreen(
                     InfoRow(
                         title = account.name,
                         value = when {
-                            balance?.error != null -> "sync failed"
-                            balance != null -> "${balance.pending} pending"
-                            account.stakingAddress != null -> "staking, not synced"
+                            balance?.error != null -> stringResource(R.string.accounts_sync_failed)
+                            balance != null -> stringResource(R.string.accounts_pending, balance.pending)
+                            account.stakingAddress != null -> stringResource(R.string.accounts_not_synced)
                             else -> account.kind.lowercase()
                         },
                     )
@@ -143,13 +147,13 @@ fun AccountsScreen(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
-                            "Rewards still accruing on chain are added to your holding.",
+                            stringResource(R.string.accounts_rewards_note),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.weight(1f),
                         )
                         TextButton(onClick = viewModel::sync, enabled = !state.syncing) {
-                            Text(if (state.syncing) "Checking" else "Refresh")
+                            Text(stringResource(if (state.syncing) R.string.accounts_checking else R.string.action_refresh))
                         }
                     }
                 }
@@ -165,25 +169,25 @@ fun AccountsScreen(
         }
 
         Section(
-            title = "Add an account",
-            subtitle = "A staking address lets Eddies import reward history automatically.",
+            title = stringResource(R.string.accounts_add_title),
+            subtitle = stringResource(R.string.accounts_add_hint),
         ) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedTextField(
                     value = state.nameDraft,
                     onValueChange = viewModel::setName,
-                    label = { Text("Name") },
+                    label = { Text(stringResource(R.string.accounts_name)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
                 OutlinedTextField(
                     value = state.stakeDraft,
                     onValueChange = viewModel::setStake,
-                    label = { Text("Staking address (optional)") },
+                    label = { Text(stringResource(R.string.accounts_stake)) },
                     placeholder = { Text("stake1...") },
                     singleLine = true,
                     supportingText = {
-                        Text("Cardano stake addresses (stake1...) are supported. Rewards still accruing are added to your holding.")
+                        Text(stringResource(R.string.accounts_stake_hint))
                     },
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -191,7 +195,7 @@ fun AccountsScreen(
                     onClick = viewModel::add,
                     enabled = state.nameDraft.isNotBlank(),
                     modifier = Modifier.fillMaxWidth(),
-                ) { Text("Add account") }
+                ) { Text(stringResource(R.string.accounts_add)) }
             }
         }
     }

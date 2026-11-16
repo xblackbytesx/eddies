@@ -1,5 +1,7 @@
 package com.eddies.app.feature.portfolio
 
+import com.eddies.app.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -35,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.eddies.app.core.design.ChartRange
+import com.eddies.app.core.ui.labelRes
 import com.eddies.app.core.design.InteractiveLineChart
 import com.eddies.app.core.ui.AssetIcon
 import com.eddies.app.core.ui.EmptyHint
@@ -84,7 +87,7 @@ fun PortfolioScreen(
                         FilterChip(
                             selected = option == state.scope,
                             onClick = { viewModel.setScope(option) },
-                            label = { Text(option.label) },
+                            label = { Text(stringResource(option.labelRes)) },
                         )
                     }
                 }
@@ -123,7 +126,7 @@ fun PortfolioScreen(
         } else {
             item {
                 Text(
-                    text = "Holdings",
+                    text = stringResource(R.string.portfolio_holdings),
                     style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.padding(top = 8.dp),
@@ -158,11 +161,13 @@ private fun TotalHeader(state: PortfolioUiState, onToggleHidden: () -> Unit) {
     Column(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                text = when (state.scope) {
-                    com.eddies.app.domain.PortfolioScope.ALL -> "Total value"
-                    com.eddies.app.domain.PortfolioScope.CRYPTO -> "Crypto value"
-                    com.eddies.app.domain.PortfolioScope.STOCKS -> "Stocks value"
-                },
+                text = stringResource(
+                    when (state.scope) {
+                        com.eddies.app.domain.PortfolioScope.ALL -> R.string.portfolio_total_value
+                        com.eddies.app.domain.PortfolioScope.CRYPTO -> R.string.portfolio_crypto_value
+                        com.eddies.app.domain.PortfolioScope.STOCKS -> R.string.portfolio_stocks_value
+                    },
+                ),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -174,7 +179,7 @@ private fun TotalHeader(state: PortfolioUiState, onToggleHidden: () -> Unit) {
             IconButton(onClick = onToggleHidden) {
                 Icon(
                     imageVector = if (state.hidden) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                    contentDescription = if (state.hidden) "Show balances" else "Hide balances",
+                    contentDescription = stringResource(if (state.hidden) R.string.portfolio_show_balances else R.string.settings_hide_balances),
                 )
             }
         }
@@ -211,12 +216,12 @@ private fun TotalHeader(state: PortfolioUiState, onToggleHidden: () -> Unit) {
         if (state.advanced) {
             Spacer(Modifier.size(6.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                Stat("Cost", MoneyFormat.fiat(state.scopedCost, summary.currency, state.hidden))
-                Stat("Realised", MoneyFormat.signedFiat(state.scopedRealized, summary.currency, state.hidden))
+                Stat(stringResource(R.string.portfolio_cost), MoneyFormat.fiat(state.scopedCost, summary.currency, state.hidden))
+                Stat(stringResource(R.string.portfolio_realised), MoneyFormat.signedFiat(state.scopedRealized, summary.currency, state.hidden))
                 if (state.scopedIncome.signum() > 0) {
                     // Staking and dividends together: everything earned rather
                     // than bought, whichever class it came from.
-                    Stat("Earned", MoneyFormat.fiat(state.scopedIncome, summary.currency, state.hidden))
+                    Stat(stringResource(R.string.portfolio_earned), MoneyFormat.fiat(state.scopedIncome, summary.currency, state.hidden))
                 }
             }
         }
@@ -238,7 +243,7 @@ private fun RangeSelector(selected: ChartRange, onSelect: (ChartRange) -> Unit) 
             FilterChip(
                 selected = range == selected,
                 onClick = { onSelect(range) },
-                label = { Text(range.label, style = MaterialTheme.typography.labelMedium) },
+                label = { Text(stringResource(range.labelRes), style = MaterialTheme.typography.labelMedium) },
             )
         }
     }
@@ -335,12 +340,12 @@ private fun EmptyPortfolio(
     // A scope filter can empty a portfolio that is not actually empty. Offering
     // to import a backup there would be nonsense.
     if (scope != PortfolioScope.ALL) {
-        EmptyHint("Nothing in ${scope.label.lowercase()} yet.")
+        EmptyHint(stringResource(R.string.portfolio_scope_empty, stringResource(scope.labelRes).lowercase()))
         return
     }
 
     if (onboarded) {
-        EmptyHint("Nothing held right now. Past transactions are still in your history.")
+        EmptyHint(stringResource(R.string.portfolio_sold_out))
         return
     }
 
@@ -349,19 +354,19 @@ private fun EmptyPortfolio(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text("Nothing here yet", style = MaterialTheme.typography.titleMedium)
+        Text(stringResource(R.string.portfolio_empty_title), style = MaterialTheme.typography.titleMedium)
         Text(
-            "Track crypto and shares together. Everything stays on this phone.",
+            stringResource(R.string.portfolio_empty_body),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
         )
         Spacer(Modifier.size(8.dp))
         Button(onClick = onAdd, modifier = Modifier.fillMaxWidth()) {
-            Text("Add your first position")
+            Text(stringResource(R.string.portfolio_add_first))
         }
         OutlinedButton(onClick = onImport, modifier = Modifier.fillMaxWidth()) {
-            Text("Import a CSV or restore a backup")
+            Text(stringResource(R.string.portfolio_import))
         }
     }
 }

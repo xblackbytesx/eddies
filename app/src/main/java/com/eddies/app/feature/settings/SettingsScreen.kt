@@ -1,5 +1,7 @@
 package com.eddies.app.feature.settings
 
+import com.eddies.app.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -60,17 +62,17 @@ fun SettingsScreen(
     ) {
         Spacer(Modifier.size(4.dp))
 
-        Section("Preferences") {
+        Section(stringResource(R.string.settings_preferences)) {
             NavRow(
-                title = "General",
-                subtitle = "Theme, currencies, and how much detail to show.",
+                title = stringResource(R.string.settings_general),
+                subtitle = stringResource(R.string.settings_general_hint),
                 icon = Icons.Default.Tune,
                 onClick = onOpenGeneral,
             )
             HorizontalDivider()
             NavRow(
-                title = "Portfolio",
-                subtitle = "Cost basis, fees, accounts and wallets.",
+                title = stringResource(R.string.settings_portfolio),
+                subtitle = stringResource(R.string.settings_portfolio_hint),
                 icon = Icons.Default.PieChart,
                 onClick = onOpenPortfolio,
             )
@@ -79,49 +81,48 @@ fun SettingsScreen(
         // Crypto and stocks are peers, side by side, because that is how the
         // portfolio itself is organised. Neither is the default one.
         Section(
-            title = "Markets",
-            subtitle = "Where each kind of price comes from.",
+            title = stringResource(R.string.settings_markets),
+            subtitle = stringResource(R.string.settings_markets_hint),
         ) {
             NavRow(
-                title = "Crypto",
-                subtitle = "Live feed, fallback source, coin icons.",
+                title = stringResource(R.string.class_crypto),
+                subtitle = stringResource(R.string.settings_crypto_hint),
                 icon = Icons.Default.CurrencyBitcoin,
                 onClick = onOpenCrypto,
             )
             HorizontalDivider()
             NavRow(
-                title = "Stocks",
-                subtitle = "Price sources for shares and ETFs.",
+                title = stringResource(R.string.class_stocks),
+                subtitle = stringResource(R.string.settings_stocks_hint),
                 icon = Icons.AutoMirrored.Filled.ShowChart,
                 onClick = onOpenStocks,
             )
         }
 
-        Section("Your data") {
+        Section(stringResource(R.string.settings_your_data)) {
             NavRow(
-                title = "Privacy and security",
-                subtitle = "App lock, hidden balances, recent apps.",
+                title = stringResource(R.string.settings_privacy),
+                subtitle = stringResource(R.string.settings_privacy_hint),
                 icon = Icons.Default.Lock,
                 onClick = onOpenPrivacy,
             )
             HorizontalDivider()
             NavRow(
-                title = "Data management",
-                subtitle = "History, backups, merging, deletion.",
+                title = stringResource(R.string.settings_data),
+                subtitle = stringResource(R.string.settings_data_hint),
                 icon = Icons.Default.Storage,
                 onClick = onOpenData,
             )
         }
 
-        Section("About") {
-            InfoRow("Version", BuildConfig.VERSION_NAME)
+        Section(stringResource(R.string.settings_about)) {
+            InfoRow(stringResource(R.string.about_version), BuildConfig.VERSION_NAME)
             HorizontalDivider()
-            NavRow(title = "Licences and privacy", onClick = onOpenAbout)
+            NavRow(title = stringResource(R.string.settings_licences), onClick = onOpenAbout)
         }
 
         Text(
-            "Eddies keeps everything on this device. Nothing is uploaded, and no " +
-                "account is needed.",
+            stringResource(R.string.settings_footer),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = 4.dp),

@@ -1,5 +1,8 @@
 package com.eddies.app.feature.settings
 
+import com.eddies.app.core.ui.labelRes
+import com.eddies.app.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -19,41 +22,41 @@ fun GeneralSettingsScreen(
     val cfg = state.settings
 
     SettingsPage(modifier, state.message) {
-        Section("Appearance") {
+        Section(stringResource(R.string.settings_appearance)) {
             ChoiceRow(
-                title = "Theme",
+                title = stringResource(R.string.settings_theme),
                 options = ThemeMode.entries,
                 selected = cfg.themeMode,
-                label = { it.label },
+                label = { stringResource(it.labelRes) },
                 onSelect = viewModel::setThemeMode,
             )
             HorizontalDivider()
             SettingSwitch(
-                title = "Material You colours",
-                subtitle = "Off by default: a wallpaper tint fights the gain and loss colours.",
+                title = stringResource(R.string.settings_dynamic_color),
+                subtitle = stringResource(R.string.settings_dynamic_color_hint),
                 checked = cfg.dynamicColor,
                 onCheckedChange = viewModel::setDynamicColor,
             )
             HorizontalDivider()
             SettingSwitch(
-                title = "Compact rows",
-                subtitle = "Fit more holdings on screen.",
+                title = stringResource(R.string.settings_compact),
+                subtitle = stringResource(R.string.settings_compact_hint),
                 checked = cfg.compactRows,
                 onCheckedChange = viewModel::setCompactRows,
             )
             HorizontalDivider()
             SettingSwitch(
-                title = "Hide navigation when scrolling",
-                subtitle = "The bar slides away as you scroll down and returns on the way up.",
+                title = stringResource(R.string.settings_hide_nav),
+                subtitle = stringResource(R.string.settings_hide_nav_hint),
                 checked = cfg.hideNavOnScroll,
                 onCheckedChange = viewModel::setHideNavOnScroll,
             )
         }
 
-        Section("Currency") {
+        Section(stringResource(R.string.settings_currency)) {
             ChoiceRow(
-                title = "Main currency",
-                subtitle = "Everything is valued and totalled in this.",
+                title = stringResource(R.string.settings_main_currency),
+                subtitle = stringResource(R.string.settings_main_currency_hint),
                 options = state.currencies,
                 selected = cfg.baseCurrency,
                 label = { it },
@@ -64,19 +67,19 @@ fun GeneralSettingsScreen(
             // now the only way to change it was restoring a backup that carried
             // a different one.
             ChoiceRow(
-                title = "Second currency",
-                subtitle = "Shown under the portfolio total. Off unless you want it.",
+                title = stringResource(R.string.settings_second_currency),
+                subtitle = stringResource(R.string.settings_second_currency_hint),
                 options = state.secondaryCurrencies,
                 selected = cfg.secondaryCurrency,
-                label = { if (it.isEmpty()) "Off" else it },
+                label = { if (it.isEmpty()) stringResource(R.string.off) else it },
                 onSelect = viewModel::setSecondaryCurrency,
             )
         }
 
-        Section("Detail") {
+        Section(stringResource(R.string.settings_detail)) {
             SettingSwitch(
-                title = "Advanced trader mode",
-                subtitle = "Adds cost basis, realised P/L, ranks and per-row detail.",
+                title = stringResource(R.string.settings_advanced),
+                subtitle = stringResource(R.string.settings_advanced_hint),
                 checked = cfg.advancedMode,
                 onCheckedChange = viewModel::setAdvancedMode,
             )
@@ -84,8 +87,8 @@ fun GeneralSettingsScreen(
             // Shared by both asset classes, so it belongs here rather than in
             // either market screen.
             ChoiceRow(
-                title = "Price refresh",
-                subtitle = "How often polled prices update. Live feeds push as they happen.",
+                title = stringResource(R.string.settings_poll),
+                subtitle = stringResource(R.string.settings_poll_hint),
                 options = listOf(15, 30, 60, 120, 300),
                 selected = cfg.pollIntervalSeconds,
                 label = { if (it < 60) "${it}s" else "${it / 60}m" },

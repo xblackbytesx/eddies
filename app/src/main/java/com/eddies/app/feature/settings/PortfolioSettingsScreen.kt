@@ -1,5 +1,8 @@
 package com.eddies.app.feature.settings
 
+import com.eddies.app.core.ui.labelRes
+import com.eddies.app.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -21,30 +24,30 @@ fun PortfolioSettingsScreen(
 
     SettingsPage(modifier, state.message) {
         Section(
-            title = "Cost basis",
-            subtitle = "Changing this recalculates every realised profit you have.",
+            title = stringResource(R.string.settings_cost_basis),
+            subtitle = stringResource(R.string.settings_cost_basis_hint),
         ) {
             ChoiceRow(
-                title = "Method",
-                subtitle = "How a sale decides which purchase it is selling.",
+                title = stringResource(R.string.settings_method),
+                subtitle = stringResource(R.string.settings_method_hint),
                 options = CostBasisMethod.entries,
                 selected = cfg.costBasisMethod,
-                label = { it.name.lowercase().replaceFirstChar(Char::uppercase) },
+                label = { stringResource(it.labelRes) },
                 onSelect = viewModel::setCostBasisMethod,
             )
             HorizontalDivider()
             SettingSwitch(
-                title = "Count fees in cost basis",
-                subtitle = "Fees raise what a buy cost you and lower what a sale returned.",
+                title = stringResource(R.string.settings_fees),
+                subtitle = stringResource(R.string.settings_fees_hint),
                 checked = cfg.includeFeesInBasis,
                 onCheckedChange = viewModel::setIncludeFees,
             )
         }
 
-        Section("Grouping") {
+        Section(stringResource(R.string.settings_grouping)) {
             NavRow(
-                title = "Accounts and wallets",
-                subtitle = "Group positions, and add a staking address.",
+                title = stringResource(R.string.settings_accounts),
+                subtitle = stringResource(R.string.settings_accounts_hint),
                 onClick = onOpenAccounts,
             )
         }

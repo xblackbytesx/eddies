@@ -8,13 +8,13 @@ import java.time.format.DateTimeFormatter
 data class ChartPoint(val ts: Long, val value: Double)
 
 /** The ranges the chart selector offers. */
-enum class ChartRange(val label: String, val days: Int) {
-    DAY("1D", 1),
-    WEEK("1W", 7),
-    MONTH("1M", 30),
-    QUARTER("3M", 90),
-    YEAR("1Y", 365),
-    ALL("All", 3650);
+enum class ChartRange(val days: Int) {
+    DAY(1),
+    WEEK(7),
+    MONTH(30),
+    QUARTER(90),
+    YEAR(365),
+    ALL(3650);
 
     /** Ranges short enough that a point per day would be a handful of dots. */
     val intraday: Boolean get() = this == DAY || this == WEEK

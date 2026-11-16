@@ -268,14 +268,15 @@ internal fun Asset.toEntity(tracked: Boolean = false) = AssetEntity(
  */
 suspend fun AssetRepository.lookupTradegate(rawIsin: String): TradegateLookup {
     val isin = Isin.normalise(rawIsin)
-    if (!Isin.looksLikeIsin(isin)) return TradegateLookup.Invalid("That is not an ISIN. They look like NL0010273215.")
-    if (!Isin.isValid(isin)) return TradegateLookup.Invalid("That ISIN's check digit is wrong. Check for a typo.")
+    if (!Isin.looksLikeIsin(isin)) return TradegateLookup.Invalid(badCheckDigit = false)
+    if (!Isin.isValid(isin)) return TradegateLookup.Invalid(badCheckDigit = true)
     return resolveTradegate(isin)
 }
 
 sealed interface TradegateLookup {
     data class Found(val asset: Asset, val price: java.math.BigDecimal) : TradegateLookup
-    data class Invalid(val reason: String) : TradegateLookup
+    /** Not an ISIN at all, or shaped like one with a check digit that does not add up. */
+    data class Invalid(val badCheckDigit: Boolean) : TradegateLookup
     data object NotListed : TradegateLookup
     data object Unreachable : TradegateLookup
 }

@@ -1,5 +1,7 @@
 package com.eddies.app.feature.settings
 
+import com.eddies.app.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -19,30 +21,30 @@ fun PrivacySettingsScreen(
 
     SettingsPage(modifier, state.message) {
         Section(
-            title = "App lock",
-            subtitle = "The database is encrypted either way. This guards an unlocked phone.",
+            title = stringResource(R.string.settings_lock),
+            subtitle = stringResource(R.string.settings_lock_hint),
         ) {
             SettingSwitch(
-                title = "Require unlock",
-                subtitle = "Ask for your fingerprint or PIN when opening the app.",
+                title = stringResource(R.string.settings_require_unlock),
+                subtitle = stringResource(R.string.settings_require_unlock_hint),
                 checked = cfg.appLockEnabled,
                 onCheckedChange = viewModel::setAppLock,
             )
             HorizontalDivider()
-            InfoRow("Re-locks", "Whenever you leave the app")
+            InfoRow(stringResource(R.string.settings_relocks), stringResource(R.string.settings_relocks_value))
         }
 
-        Section("On screen") {
+        Section(stringResource(R.string.settings_on_screen)) {
             SettingSwitch(
-                title = "Hide balances",
-                subtitle = "Blur every amount until you tap the eye.",
+                title = stringResource(R.string.settings_hide_balances),
+                subtitle = stringResource(R.string.settings_hide_balances_hint),
                 checked = cfg.hideBalances,
                 onCheckedChange = viewModel::setHideBalances,
             )
             HorizontalDivider()
             SettingSwitch(
-                title = "Hide from recent apps",
-                subtitle = "Keeps balances out of the app switcher thumbnail, and blocks screenshots.",
+                title = stringResource(R.string.settings_hide_recents),
+                subtitle = stringResource(R.string.settings_hide_recents_hint),
                 checked = cfg.hideInRecents,
                 onCheckedChange = viewModel::setHideInRecents,
             )

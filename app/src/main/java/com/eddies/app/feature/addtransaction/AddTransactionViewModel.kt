@@ -1,5 +1,6 @@
 package com.eddies.app.feature.addtransaction
 
+import com.eddies.app.R
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -77,14 +78,16 @@ data class AddTxUiState(
 
     val effectivePrice: BigDecimal? get() = priceInput.toDecimalOrNull()
 
-    /** The other half of the pair, shown live under the input being edited. */
+    /**
+     * The other half of the pair, shown live under the input being edited: a
+     * total in money when a quantity is typed, a quantity when a total is.
+     */
     val derivedLabel: String?
         get() {
             val price = effectivePrice ?: return null
             return when (amountMode) {
                 AmountMode.QUANTITY -> quantityInput.toDecimalOrNull()
                     ?.let { com.eddies.app.domain.MoneyFormat.fiat(it * price, currency) }
-                    ?.let { "Total $it" }
                 AmountMode.TOTAL -> effectiveQuantity
                     ?.let { com.eddies.app.domain.MoneyFormat.quantity(it, asset?.decimals ?: 8) }
                     ?.let { "$it ${asset?.symbol.orEmpty()}" }
@@ -115,6 +118,7 @@ class AddTransactionViewModel @Inject constructor(
     private val settings: SettingsDataStore,
     private val fx: com.eddies.app.data.price.FxRepository,
     private val icons: IconResolver,
+    private val strings: com.eddies.app.core.ui.Strings,
 ) : ViewModel() {
 
     private val route = saved.toRoute<AddTransactionRoute>()
@@ -323,7 +327,7 @@ class AddTransactionViewModel @Inject constructor(
             }.onSuccess {
                 _state.update { it.copy(saving = false, saved = true) }
             }.onFailure { e ->
-                _state.update { it.copy(saving = false, error = e.message ?: "Could not save.") }
+                _state.update { it.copy(saving = false, error = e.message ?: strings(R.string.add_save_failed)) }
             }
         }
     }

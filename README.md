@@ -65,12 +65,13 @@ numbers are invented. The prices, charts and staking figures in it are live.</su
   per-row detail once you want them.
 - **Encrypted backups**, plus a plain CSV export for a spreadsheet or a tax
   tool, clearly labelled as unencrypted.
-- **Broker import.** Transaction exports from DEGIRO, Kraken and Bitvavo are
-  read as they are, with no columns to map. Importing the same file twice adds
-  nothing.
+- **Broker import.** Transaction exports from DEGIRO, Trade Republic, Kraken and
+  Bitvavo are read as they are, with no columns to map. Importing the same file
+  twice adds nothing.
 - **A home screen widget** with your total and how it has moved since the last
   close. It hides the amount whenever the app lock is on.
 - **Dark by default**, with a true-black OLED mode.
+- **English and Dutch**, following your system language.
 
 ## Installing
 

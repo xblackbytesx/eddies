@@ -1,5 +1,7 @@
 package com.eddies.app.feature.transactions
 
+import com.eddies.app.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -28,7 +30,7 @@ import com.eddies.app.core.ui.AssetIcon
 import com.eddies.app.core.ui.EmptyHint
 import com.eddies.app.core.ui.LoadingPlaceholder
 import com.eddies.app.data.repo.UserSelectableTxTypes
-import com.eddies.app.data.repo.label
+import com.eddies.app.core.ui.labelRes
 import com.eddies.app.domain.Asset
 import com.eddies.app.domain.MoneyFormat
 import com.eddies.app.domain.Transaction
@@ -56,13 +58,13 @@ fun TransactionsScreen(
                 FilterChip(
                     selected = state.filter == null,
                     onClick = { viewModel.setFilter(null) },
-                    label = { Text("All") },
+                    label = { Text(stringResource(R.string.filter_all)) },
                 )
                 UserSelectableTxTypes.forEach { type ->
                     FilterChip(
                         selected = state.filter == type,
                         onClick = { viewModel.setFilter(type) },
-                        label = { Text(type.label) },
+                        label = { Text(stringResource(type.labelRes)) },
                     )
                 }
             }
@@ -75,8 +77,8 @@ fun TransactionsScreen(
 
         if (state.isEmpty) {
             EmptyHint(
-                if (state.filter == null) "Nothing recorded yet."
-                else "No ${state.filter?.label?.lowercase()} transactions.",
+                state.filter?.let { stringResource(R.string.tx_none_of_type, stringResource(it.labelRes).lowercase()) }
+                    ?: stringResource(R.string.tx_none),
             )
             return@Column
         }
@@ -126,7 +128,7 @@ private fun TransactionRow(
         Spacer(Modifier.size(12.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = "${asset?.symbol ?: tx.assetId.substringAfterLast(':')} ${tx.type.label.lowercase()}",
+                text = "${asset?.symbol ?: tx.assetId.substringAfterLast(':')} ${stringResource(tx.type.labelRes).lowercase()}",
                 style = MaterialTheme.typography.bodyMedium,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,

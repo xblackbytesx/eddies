@@ -1,5 +1,6 @@
 package com.eddies.app.feature.backup
 
+import com.eddies.app.R
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.eddies.app.core.backup.BackupCrypto
@@ -20,6 +21,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import com.eddies.app.core.ui.Strings
 import javax.inject.Inject
 
 data class BackupUiState(
@@ -48,6 +50,7 @@ class BackupViewModel @Inject constructor(
     private val assetDao: AssetDao,
     private val settings: SettingsDataStore,
     private val brokerImporter: BrokerImporter,
+    private val strings: Strings,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(BackupUiState())
@@ -70,9 +73,9 @@ class BackupViewModel @Inject constructor(
                 )
                 write(bytes)
             }.onSuccess {
-                _state.update { it.copy(busy = false, message = "Backup written.", passphrase = "") }
+                _state.update { it.copy(busy = false, message = strings(R.string.msg_backup_written), passphrase = "") }
             }.onFailure { e ->
-                _state.update { it.copy(busy = false, error = e.message ?: "Could not write the backup.") }
+                _state.update { it.copy(busy = false, error = e.message ?: strings(R.string.err_backup_write)) }
             }
         }
     }
@@ -90,9 +93,9 @@ class BackupViewModel @Inject constructor(
                 }
                 .onFailure { e ->
                     val msg = when (e) {
-                        is BackupCrypto.BadPassphraseException -> "Wrong passphrase, or the file is damaged."
-                        is BackupCrypto.InvalidBackupException -> e.message ?: "Not an Eddies backup."
-                        else -> e.message ?: "Could not read the file."
+                        is BackupCrypto.BadPassphraseException -> strings(R.string.err_bad_passphrase)
+                        is BackupCrypto.InvalidBackupException -> strings(R.string.err_not_backup)
+                        else -> e.message ?: strings(R.string.err_read_file)
                     }
                     _state.update { it.copy(busy = false, error = msg) }
                 }
@@ -108,12 +111,12 @@ class BackupViewModel @Inject constructor(
                     _state.update {
                         it.copy(
                             busy = false, manifest = null, pendingBytes = null, passphrase = "",
-                            message = "Imported $count transactions.",
+                            message = strings.plural(R.plurals.msg_imported, count),
                         )
                     }
                 }
                 .onFailure { e ->
-                    _state.update { it.copy(busy = false, error = e.message ?: "Restore failed.") }
+                    _state.update { it.copy(busy = false, error = e.message ?: strings(R.string.err_restore)) }
                 }
         }
     }
@@ -127,9 +130,9 @@ class BackupViewModel @Inject constructor(
                     .associate { it.id to it.toDomain() }
                 write(CsvExchange.export(txs, assets))
             }.onSuccess {
-                _state.update { it.copy(busy = false, message = "CSV written. It is not encrypted.") }
+                _state.update { it.copy(busy = false, message = strings(R.string.msg_csv_written)) }
             }.onFailure { e ->
-                _state.update { it.copy(busy = false, error = e.message ?: "Could not write the CSV.") }
+                _state.update { it.copy(busy = false, error = e.message ?: strings(R.string.err_csv_write)) }
             }
         }
     }
@@ -148,14 +151,14 @@ class BackupViewModel @Inject constructor(
                 runCatching { brokerImporter.import(broker, transactions.defaultAccountId()) }
                     .onSuccess { result -> _state.update { it.copy(busy = false, message = describe(result)) } }
                     .onFailure { e ->
-                        _state.update { it.copy(busy = false, error = e.message ?: "Could not import that file.") }
+                        _state.update { it.copy(busy = false, error = e.message ?: strings(R.string.err_import)) }
                     }
                 return@launch
             }
             val result = CsvExchange.import(content, settings.current().baseCurrency)
             if (result.transactions.isEmpty()) {
                 _state.update {
-                    it.copy(busy = false, error = result.errors.firstOrNull() ?: "Nothing importable in that file.")
+                    it.copy(busy = false, error = strings(R.string.err_nothing_importable))
                 }
                 return@launch
             }
@@ -167,10 +170,10 @@ class BackupViewModel @Inject constructor(
                 it.copy(
                     busy = false,
                     message = buildString {
-                        append("Imported $imported transactions.")
+                        append(strings.plural(R.plurals.msg_imported, imported))
                         val held = result.transactions.size - imported
-                        if (held > 0) append(" $held were already in your ledger.")
-                        if (result.skipped > 0) append(" Skipped ${result.skipped} unreadable rows.")
+                        if (held > 0) append(' ').append(strings.plural(R.plurals.msg_already_held, held))
+                        if (result.skipped > 0) append(' ').append(strings.plural(R.plurals.msg_unreadable, result.skipped))
                     },
                 )
             }
@@ -178,14 +181,18 @@ class BackupViewModel @Inject constructor(
     }
 
     private fun describe(result: BrokerImportResult): String = buildString {
-        append("${result.broker.label} export: imported ${result.imported} transactions.")
-        if (result.alreadyHeld > 0) append(" ${result.alreadyHeld} were already in your ledger.")
-        if (result.unreadable > 0) append(" ${result.unreadable} rows could not be read.")
+        append(strings(R.string.msg_broker_file, result.broker.label)).append(' ')
+        append(strings.plural(R.plurals.msg_imported, result.imported))
+        if (result.alreadyHeld > 0) append(' ').append(strings.plural(R.plurals.msg_already_held, result.alreadyHeld))
+        if (result.unreadable > 0) append(' ').append(strings.plural(R.plurals.msg_unreadable, result.unreadable))
         if (result.unresolved.isNotEmpty()) {
-            append(" Not recognized, so left out: ")
-            append(result.unresolved.entries.take(5).joinToString(", ") { (name, rows) -> "$name ($rows)" })
-            if (result.unresolved.size > 5) append(" and ${result.unresolved.size - 5} more")
-            append(".")
+            val names = result.unresolved.entries.take(5).joinToString(", ") { (name, rows) -> "$name ($rows)" }
+            val more = result.unresolved.size - 5
+            append(' ')
+            append(
+                if (more > 0) strings.plural(R.plurals.msg_unresolved_more, more, names)
+                else strings(R.string.msg_unresolved, names),
+            )
         }
     }
 }

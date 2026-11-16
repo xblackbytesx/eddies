@@ -191,13 +191,13 @@ data class WatchlistEntity(
 )
 
 /** The kind of place a coin sits. A closed set, so it can carry an icon and group. */
-enum class CustodyType(val label: String) {
-    HARDWARE_WALLET("Hardware wallet"),
-    EXCHANGE("Exchange"),
-    SOFTWARE_WALLET("Software wallet"),
-    COLD_STORAGE("Cold storage"),
-    DEFI("DeFi / staked"),
-    OTHER("Other"),
+enum class CustodyType {
+    HARDWARE_WALLET,
+    EXCHANGE,
+    SOFTWARE_WALLET,
+    COLD_STORAGE,
+    DEFI,
+    OTHER,
 }
 
 /**

@@ -1,5 +1,6 @@
 package com.eddies.app.feature.settings
 
+import com.eddies.app.R
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.eddies.app.core.design.ThemeMode
@@ -17,6 +18,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import com.eddies.app.core.ui.Strings
 import javax.inject.Inject
 
 data class SettingsUiState(
@@ -34,6 +36,7 @@ data class SettingsUiState(
 class SettingsViewModel @Inject constructor(
     private val settings: SettingsDataStore,
     private val transactions: TransactionRepository,
+    private val strings: Strings,
 ) : ViewModel() {
 
     private val geckoDraft = MutableStateFlow("")
@@ -71,28 +74,28 @@ class SettingsViewModel @Inject constructor(
     fun saveStockKey() = launch {
         settings.setStockApiKey(stockDraft.value.trim())
         stockDraft.value = ""
-        message.value = "Stock API key saved."
+        message.value = strings(R.string.msg_stock_key_saved)
     }
 
     fun clearStockKey() = launch {
         settings.setStockApiKey("")
-        message.value = "Stock API key removed."
+        message.value = strings(R.string.msg_stock_key_removed)
     }
 
     fun saveGeckoKey() = launch {
         settings.setCoinGeckoKey(geckoDraft.value.trim())
         geckoDraft.value = ""
-        message.value = "API key saved."
+        message.value = strings(R.string.msg_key_saved)
     }
 
     fun clearGeckoKey() = launch {
         settings.setCoinGeckoKey("")
-        message.value = "API key removed."
+        message.value = strings(R.string.msg_key_removed)
     }
 
     fun eraseEverything() = launch {
         transactions.deleteAll()
-        message.value = "All transactions deleted."
+        message.value = strings(R.string.msg_all_deleted)
     }
 
     fun dismissMessage() { message.value = null }

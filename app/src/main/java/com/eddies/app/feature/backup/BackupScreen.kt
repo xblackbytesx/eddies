@@ -1,5 +1,8 @@
 package com.eddies.app.feature.backup
 
+import androidx.compose.ui.res.pluralStringResource
+import com.eddies.app.R
+import androidx.compose.ui.res.stringResource
 import android.content.Context
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -81,32 +84,36 @@ fun BackupScreen(
         if (state.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
 
         Section(
-            title = "Encrypted backup",
-            subtitle = "Your passphrase is the only way back in. Nothing can recover it.",
+            title = stringResource(R.string.backup_encrypted),
+            subtitle = stringResource(R.string.backup_encrypted_hint),
         ) {
             Column(Modifier.padding(16.dp)) {
                 OutlinedTextField(
                     value = state.passphrase,
                     onValueChange = viewModel::setPassphrase,
-                    label = { Text("Passphrase") },
+                    label = { Text(stringResource(R.string.backup_passphrase)) },
                     visualTransformation = PasswordVisualTransformation(),
                     singleLine = true,
                     supportingText = {
-                        Text("At least ${BackupUiState.MIN_PASSPHRASE} characters.")
+                        Text(pluralStringResource(
+                            R.plurals.backup_passphrase_min,
+                            BackupUiState.MIN_PASSPHRASE,
+                            BackupUiState.MIN_PASSPHRASE,
+                        ))
                     },
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
             HorizontalDivider()
             SettingSwitch(
-                title = "Include settings",
+                title = stringResource(R.string.backup_include_settings),
                 checked = state.includeSettings,
                 onCheckedChange = viewModel::setIncludeSettings,
             )
             HorizontalDivider()
             SettingSwitch(
-                title = "Include portfolio",
-                subtitle = "Transactions, accounts and the coins they reference.",
+                title = stringResource(R.string.backup_include_portfolio),
+                subtitle = stringResource(R.string.backup_include_portfolio_hint),
                 checked = state.includePortfolio,
                 onCheckedChange = viewModel::setIncludePortfolio,
             )
@@ -116,30 +123,28 @@ fun BackupScreen(
                     onClick = { createBackup.launch("eddies-$today.eddies") },
                     enabled = state.canExport,
                     modifier = Modifier.fillMaxWidth(),
-                ) { Text("Write backup") }
+                ) { Text(stringResource(R.string.backup_write)) }
                 OutlinedButton(
                     onClick = { openBackup.launch(arrayOf("*/*")) },
                     enabled = state.canPreview,
                     modifier = Modifier.fillMaxWidth(),
-                ) { Text("Restore from backup") }
+                ) { Text(stringResource(R.string.backup_restore)) }
             }
         }
 
         Section(
-            title = "Spreadsheets and broker files",
-            subtitle = "Plain CSV. Not encrypted: anyone who opens the file can read your ledger. " +
-                "Import also reads transaction exports from DEGIRO, Kraken and Bitvavo as they are. " +
-                "Shares in a broker file are looked up online by ISIN.",
+            title = stringResource(R.string.backup_csv),
+            subtitle = stringResource(R.string.backup_csv_hint),
         ) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(
                     onClick = { createCsv.launch("eddies-$today.csv") },
                     modifier = Modifier.fillMaxWidth(),
-                ) { Text("Export CSV") }
+                ) { Text(stringResource(R.string.backup_export_csv)) }
                 OutlinedButton(
                     onClick = { openCsv.launch(arrayOf("text/csv", "text/comma-separated-values", "text/plain", "*/*")) },
                     modifier = Modifier.fillMaxWidth(),
-                ) { Text("Import CSV") }
+                ) { Text(stringResource(R.string.backup_import_csv)) }
             }
         }
 
@@ -154,21 +159,21 @@ fun BackupScreen(
     state.manifest?.let { manifest ->
         AlertDialog(
             onDismissRequest = viewModel::dismissManifest,
-            title = { Text("Restore this backup?") },
+            title = { Text(stringResource(R.string.backup_restore_title)) },
             text = {
                 Column {
-                    Text("${manifest.transactionCount} transactions, ${manifest.accountCount} accounts.")
-                    if (manifest.hasSettings) Text("Settings are included and will be applied.")
+                    Text(stringResource(R.string.backup_manifest, manifest.transactionCount, manifest.accountCount))
+                    if (manifest.hasSettings) Text(stringResource(R.string.backup_manifest_settings))
                     Spacer(Modifier.size(8.dp))
                     Text(
-                        "Importing merges into what is already here rather than replacing it.",
+                        stringResource(R.string.backup_merge_note),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             },
-            confirmButton = { TextButton(onClick = viewModel::confirmRestore) { Text("Restore") } },
-            dismissButton = { TextButton(onClick = viewModel::dismissManifest) { Text("Cancel") } },
+            confirmButton = { TextButton(onClick = viewModel::confirmRestore) { Text(stringResource(R.string.backup_restore_confirm)) } },
+            dismissButton = { TextButton(onClick = viewModel::dismissManifest) { Text(stringResource(R.string.action_cancel)) } },
         )
     }
 }

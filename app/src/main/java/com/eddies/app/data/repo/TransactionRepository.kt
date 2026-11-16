@@ -123,22 +123,3 @@ fun txTypesFor(assetClass: com.eddies.app.domain.AssetClass): List<TxType> = whe
     com.eddies.app.domain.AssetClass.CRYPTO -> UserSelectableTxTypes - TxType.DIVIDEND
     com.eddies.app.domain.AssetClass.CASH -> listOf(TxType.TRANSFER_IN, TxType.TRANSFER_OUT)
 }
-
-val TxType.label: String
-    get() = when (this) {
-        TxType.BUY -> "Buy"
-        TxType.SELL -> "Sell"
-        TxType.TRANSFER_IN -> "Transfer in"
-        TxType.TRANSFER_OUT -> "Transfer out"
-        TxType.STAKING_REWARD -> "Staking reward"
-        TxType.AIRDROP -> "Airdrop"
-        TxType.FEE -> "Fee"
-        TxType.DIVIDEND -> "Dividend"
-    }
-
-val TxSource.label: String
-    get() = when (this) {
-        TxSource.MANUAL -> "Manual"
-        TxSource.IMPORT_CSV -> "CSV import"
-        TxSource.IMPORT_KOIOS -> "Cardano rewards"
-    }

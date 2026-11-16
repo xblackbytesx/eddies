@@ -1,5 +1,7 @@
 package com.eddies.app.feature.settings
 
+import com.eddies.app.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -21,25 +23,25 @@ fun CryptoSettingsScreen(
 
     SettingsPage(modifier, state.message) {
         Section(
-            title = "Live prices",
-            subtitle = "A push feed, so coins tick as trades happen rather than on a timer.",
+            title = stringResource(R.string.settings_live),
+            subtitle = stringResource(R.string.settings_live_hint),
         ) {
             ChoiceRow(
-                title = "Feed",
-                subtitle = "Kraken quotes EUR pairs directly. Binance covers more coins but prices in USDT.",
+                title = stringResource(R.string.settings_feed),
+                subtitle = stringResource(R.string.settings_feed_hint),
                 options = RealtimeFeed.entries,
                 selected = cfg.realtimeFeed,
-                label = { it.label },
+                label = { if (it == RealtimeFeed.OFF) stringResource(R.string.off) else it.label },
                 onSelect = viewModel::setRealtimeFeed,
             )
         }
 
         Section(
-            title = "Everything else",
-            subtitle = "Used for coins the live feed does not list, and for chart history.",
+            title = stringResource(R.string.settings_rest),
+            subtitle = stringResource(R.string.settings_rest_hint),
         ) {
             ChoiceRow(
-                title = "Source",
+                title = stringResource(R.string.settings_source),
                 options = Aggregator.entries,
                 selected = cfg.aggregator,
                 label = { it.label },
@@ -50,9 +52,9 @@ fun CryptoSettingsScreen(
             if (cfg.aggregator == Aggregator.COINGECKO) {
                 HorizontalDivider()
                 ApiKeyEditor(
-                    title = "CoinGecko API key",
-                    savedNote = "A key is saved and encrypted on this device.",
-                    unsavedNote = "CoinGecko needs your own key. It is stored encrypted and never leaves the phone.",
+                    title = stringResource(R.string.settings_gecko_key),
+                    savedNote = stringResource(R.string.settings_key_saved),
+                    unsavedNote = stringResource(R.string.settings_gecko_key_hint),
                     draft = state.geckoKeyDraft,
                     hasKey = cfg.hasCoinGeckoKey,
                     onDraftChange = viewModel::setGeckoDraft,
@@ -62,10 +64,10 @@ fun CryptoSettingsScreen(
             }
         }
 
-        Section("Icons") {
+        Section(stringResource(R.string.settings_icons)) {
             SettingSwitch(
-                title = "Fetch missing coin icons",
-                subtitle = "Off by default. Turning this on tells the image host which coins you hold.",
+                title = stringResource(R.string.settings_remote_icons),
+                subtitle = stringResource(R.string.settings_remote_icons_hint),
                 checked = cfg.remoteIcons,
                 onCheckedChange = viewModel::setRemoteIcons,
             )

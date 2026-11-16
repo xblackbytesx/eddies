@@ -1,5 +1,7 @@
 package com.eddies.app.core.ui
 
+import com.eddies.app.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -129,9 +131,9 @@ fun PnlText(
                     else -> Icons.AutoMirrored.Filled.TrendingFlat
                 },
                 contentDescription = when {
-                    sign > 0 -> "Up"
-                    sign < 0 -> "Down"
-                    else -> "Unchanged"
+                    sign > 0 -> stringResource(R.string.pnl_up)
+                    sign < 0 -> stringResource(R.string.pnl_down)
+                    else -> stringResource(R.string.pnl_flat)
                 },
                 tint = color,
                 modifier = Modifier.size(16.dp).padding(end = 2.dp),
@@ -198,7 +200,7 @@ fun StaleBadge(modifier: Modifier = Modifier) {
         color = MaterialTheme.colorScheme.surfaceContainerHighest,
     ) {
         Text(
-            text = "cached",
+            text = stringResource(R.string.stale_badge),
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),

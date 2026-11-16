@@ -1,5 +1,7 @@
 package com.eddies.app.feature.lock
 
+import com.eddies.app.R
+import androidx.compose.ui.res.stringResource
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.compose.foundation.layout.Arrangement
@@ -40,13 +42,17 @@ fun LockScreen(onUnlocked: () -> Unit, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     var error by remember { mutableStateOf<String?>(null) }
     var prompting by remember { mutableStateOf(false) }
+    // Read here because authenticate() below is an ordinary function.
+    val noPrompt = stringResource(R.string.lock_no_prompt)
+    val promptTitle = stringResource(R.string.lock_prompt_title)
+    val promptSubtitle = stringResource(R.string.lock_prompt_subtitle)
 
     fun authenticate() {
         val activity = context.findFragmentActivity()
         if (activity == null) {
             // Without a FragmentActivity there is no prompt to show. Failing open
             // would silently disable the lock, so it fails closed and says why.
-            error = "Cannot show the unlock prompt on this screen."
+            error = noPrompt
             return
         }
         val manager = BiometricManager.from(context)
@@ -76,8 +82,8 @@ fun LockScreen(onUnlocked: () -> Unit, modifier: Modifier = Modifier) {
         )
         prompt.authenticate(
             BiometricPrompt.PromptInfo.Builder()
-                .setTitle("Unlock Eddies")
-                .setSubtitle("Your portfolio is locked")
+                .setTitle(promptTitle)
+                .setSubtitle(promptSubtitle)
                 .setAllowedAuthenticators(allowed)
                 .build(),
         )
@@ -97,13 +103,13 @@ fun LockScreen(onUnlocked: () -> Unit, modifier: Modifier = Modifier) {
             tint = MaterialTheme.colorScheme.primary,
         )
         Spacer(Modifier.size(16.dp))
-        Text("Eddies is locked", style = MaterialTheme.typography.titleLarge)
+        Text(stringResource(R.string.lock_title), style = MaterialTheme.typography.titleLarge)
         error?.let {
             Spacer(Modifier.size(8.dp))
             Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
         }
         Spacer(Modifier.size(24.dp))
-        Button(onClick = { authenticate() }, enabled = !prompting) { Text("Unlock") }
+        Button(onClick = { authenticate() }, enabled = !prompting) { Text(stringResource(R.string.lock_unlock)) }
     }
 }
 

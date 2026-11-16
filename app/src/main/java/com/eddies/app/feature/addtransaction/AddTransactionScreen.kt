@@ -1,5 +1,7 @@
 package com.eddies.app.feature.addtransaction
 
+import com.eddies.app.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -43,7 +45,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.eddies.app.core.ui.AssetIcon
 
-import com.eddies.app.data.repo.label
+import com.eddies.app.core.ui.labelRes
 import com.eddies.app.domain.MoneyFormat
 import java.time.Instant
 import java.time.ZoneId
@@ -95,7 +97,7 @@ fun AddTransactionScreen(
         // Type. Buy is first and preselected because it is the overwhelming
         // majority of what gets entered.
         Column {
-            Text("Type", style = MaterialTheme.typography.labelMedium)
+            Text(stringResource(R.string.add_type), style = MaterialTheme.typography.labelMedium)
             Spacer(Modifier.size(6.dp))
             androidx.compose.foundation.layout.FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -104,7 +106,7 @@ fun AddTransactionScreen(
                     FilterChip(
                         selected = state.type == type,
                         onClick = { viewModel.setType(type) },
-                        label = { Text(type.label) },
+                        label = { Text(stringResource(type.labelRes)) },
                     )
                 }
             }
@@ -116,10 +118,10 @@ fun AddTransactionScreen(
             OutlinedTextField(
                 value = state.cashInput,
                 onValueChange = viewModel::setCash,
-                label = { Text("Cash received (${state.currency})") },
+                label = { Text(stringResource(R.string.add_cash, state.currency)) },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 singleLine = true,
-                supportingText = { Text("Does not change how many shares you hold.") },
+                supportingText = { Text(stringResource(R.string.add_cash_hint)) },
                 modifier = Modifier.fillMaxWidth(),
             )
         } else {
@@ -139,8 +141,8 @@ fun AddTransactionScreen(
                     label = {
                         Text(
                             when (mode) {
-                                AmountMode.QUANTITY -> "Quantity"
-                                AmountMode.TOTAL -> "Total spent"
+                                AmountMode.QUANTITY -> stringResource(R.string.add_quantity)
+                                AmountMode.TOTAL -> stringResource(R.string.add_total_spent)
                             },
                         )
                     },
@@ -152,16 +154,16 @@ fun AddTransactionScreen(
             AmountMode.QUANTITY -> OutlinedTextField(
                 value = state.quantityInput,
                 onValueChange = viewModel::setQuantity,
-                label = { Text("Quantity${state.asset?.let { " (${it.symbol})" } ?: ""}") },
+                label = { Text(stringResource(R.string.add_quantity) + (state.asset?.let { " (${it.symbol})" } ?: "")) },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 singleLine = true,
-                supportingText = { state.derivedLabel?.let { Text(it) } },
+                supportingText = { state.derivedLabel?.let { Text(stringResource(R.string.add_total, it)) } },
                 modifier = Modifier.fillMaxWidth(),
             )
             AmountMode.TOTAL -> OutlinedTextField(
                 value = state.totalInput,
                 onValueChange = viewModel::setTotal,
-                label = { Text("Total spent (${state.currency})") },
+                label = { Text(stringResource(R.string.add_total_spent_in, state.currency)) },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 singleLine = true,
                 supportingText = { state.derivedLabel?.let { Text(it) } },
@@ -172,17 +174,17 @@ fun AddTransactionScreen(
         OutlinedTextField(
             value = state.priceInput,
             onValueChange = viewModel::setPrice,
-            label = { Text("Price per unit (${state.currency})") },
+            label = { Text(stringResource(R.string.add_price, state.currency)) },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
             singleLine = true,
             supportingText = {
                 state.marketPrice?.let {
-                    Text("Market: ${MoneyFormat.price(it, state.currency)}")
+                    Text(stringResource(R.string.add_market, MoneyFormat.price(it, state.currency)))
                 }
             },
             trailingIcon = {
                 if (state.marketPrice != null) {
-                    TextButton(onClick = viewModel::useMarketPrice) { Text("Use") }
+                    TextButton(onClick = viewModel::useMarketPrice) { Text(stringResource(R.string.add_use)) }
                 }
             },
             modifier = Modifier.fillMaxWidth(),
@@ -194,7 +196,7 @@ fun AddTransactionScreen(
         // portfolio is kept in: a share quoted in dollars can be paid for in euro.
         if (state.availableCurrencies.size > 1) {
             Column {
-                Text("Priced in", style = MaterialTheme.typography.labelMedium)
+                Text(stringResource(R.string.add_priced_in), style = MaterialTheme.typography.labelMedium)
                 Spacer(Modifier.size(6.dp))
                 androidx.compose.foundation.layout.FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -210,10 +212,12 @@ fun AddTransactionScreen(
                 state.convertedPreview?.let { converted ->
                     Spacer(Modifier.size(6.dp))
                     Text(
-                        "About ${MoneyFormat.fiat(converted, state.baseCurrency)} at the rate on " +
-                            "${formatDate(state.timestamp)}. If you know what you were actually " +
-                            "charged, enter that in ${state.baseCurrency} instead: it includes your " +
-                            "broker's FX spread, and this does not.",
+                        stringResource(
+                            R.string.add_converted,
+                            MoneyFormat.fiat(converted, state.baseCurrency),
+                            formatDate(state.timestamp),
+                            state.baseCurrency,
+                        ),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -222,11 +226,11 @@ fun AddTransactionScreen(
         }
 
         OutlinedButton(onClick = { showDatePicker = true }, modifier = Modifier.fillMaxWidth()) {
-            Text("Date: ${formatDate(state.timestamp)}")
+            Text(stringResource(R.string.add_date, formatDate(state.timestamp)))
         }
 
         TextButton(onClick = { showAdvanced = !showAdvanced }) {
-            Text(if (showAdvanced) "Fewer options" else "Fee and note")
+            Text(stringResource(if (showAdvanced) R.string.add_fewer else R.string.add_more))
         }
 
         AnimatedVisibility(showAdvanced) {
@@ -234,7 +238,7 @@ fun AddTransactionScreen(
                 OutlinedTextField(
                     value = state.feeInput,
                     onValueChange = viewModel::setFee,
-                    label = { Text("Fee (${state.currency})") },
+                    label = { Text(stringResource(R.string.add_fee, state.currency)) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
@@ -242,7 +246,7 @@ fun AddTransactionScreen(
                 OutlinedTextField(
                     value = state.note,
                     onValueChange = viewModel::setNote,
-                    label = { Text("Note") },
+                    label = { Text(stringResource(R.string.add_note)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -258,14 +262,14 @@ fun AddTransactionScreen(
             enabled = state.canSave,
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Text(if (state.isEdit) "Save changes" else "Add position")
+            Text(stringResource(if (state.isEdit) R.string.add_save_changes else R.string.add_position))
         }
 
         if (state.isEdit) {
             OutlinedButton(onClick = viewModel::delete, modifier = Modifier.fillMaxWidth()) {
                 Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.size(8.dp))
-                Text("Delete transaction")
+                Text(stringResource(R.string.add_delete))
             }
         }
     }
@@ -278,10 +282,10 @@ fun AddTransactionScreen(
                 TextButton(onClick = {
                     pickerState.selectedDateMillis?.let(viewModel::setTimestamp)
                     showDatePicker = false
-                }) { Text("OK") }
+                }) { Text(stringResource(android.R.string.ok)) }
             },
             dismissButton = {
-                TextButton(onClick = { showDatePicker = false }) { Text("Cancel") }
+                TextButton(onClick = { showDatePicker = false }) { Text(stringResource(R.string.action_cancel)) }
             },
         ) { DatePicker(state = pickerState) }
     }

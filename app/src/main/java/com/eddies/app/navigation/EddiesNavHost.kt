@@ -1,5 +1,7 @@
 package com.eddies.app.navigation
 
+import com.eddies.app.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
@@ -74,15 +76,15 @@ import kotlin.reflect.KClass
 private data class Tab(
     val route: Any,
     val routeClass: KClass<*>,
-    val label: String,
+    @param:androidx.annotation.StringRes val label: Int,
     val icon: ImageVector,
 )
 
 private val tabs = listOf(
-    Tab(PortfolioRoute, PortfolioRoute::class, "Portfolio", Icons.Default.PieChart),
-    Tab(InsightsRoute, InsightsRoute::class, "Insights", Icons.Default.Insights),
-    Tab(MarketsRoute, MarketsRoute::class, "Markets", Icons.Default.Search),
-    Tab(SettingsRoute, SettingsRoute::class, "Settings", Icons.Default.Settings),
+    Tab(PortfolioRoute, PortfolioRoute::class, R.string.settings_portfolio, Icons.Default.PieChart),
+    Tab(InsightsRoute, InsightsRoute::class, R.string.nav_insights, Icons.Default.Insights),
+    Tab(MarketsRoute, MarketsRoute::class, R.string.settings_markets, Icons.Default.Search),
+    Tab(SettingsRoute, SettingsRoute::class, R.string.nav_settings, Icons.Default.Settings),
 )
 
 /**
@@ -119,21 +121,21 @@ fun EddiesNavHost(
         null
     }
     val title = when {
-        destination?.hasRoute(AssetDetailRoute::class) == true -> "Asset"
-        destination?.hasRoute(AddTransactionRoute::class) == true -> "Transaction"
-        destination?.hasRoute(AddPositionSearchRoute::class) == true -> "Add a position"
-        destination?.hasRoute(BackupRoute::class) == true -> "Backup and restore"
-        destination?.hasRoute(AccountsRoute::class) == true -> "Accounts"
-        destination?.hasRoute(AboutRoute::class) == true -> "About"
-        destination?.hasRoute(TransactionsRoute::class) == true -> "All transactions"
-        destination?.hasRoute(MergeDuplicatesRoute::class) == true -> "Merge duplicates"
-        destination?.hasRoute(GeneralSettingsRoute::class) == true -> "General"
-        destination?.hasRoute(CryptoSettingsRoute::class) == true -> "Crypto"
-        destination?.hasRoute(StockSettingsRoute::class) == true -> "Stocks"
-        destination?.hasRoute(PortfolioSettingsRoute::class) == true -> "Portfolio"
-        destination?.hasRoute(PrivacySettingsRoute::class) == true -> "Privacy and security"
-        destination?.hasRoute(DataSettingsRoute::class) == true -> "Data management"
-        else -> tabs.firstOrNull { destination?.hasRoute(it.routeClass) == true }?.label ?: "Eddies"
+        destination?.hasRoute(AssetDetailRoute::class) == true -> stringResource(R.string.nav_asset)
+        destination?.hasRoute(AddTransactionRoute::class) == true -> stringResource(R.string.nav_transaction)
+        destination?.hasRoute(AddPositionSearchRoute::class) == true -> stringResource(R.string.nav_add_position)
+        destination?.hasRoute(BackupRoute::class) == true -> stringResource(R.string.settings_backup)
+        destination?.hasRoute(AccountsRoute::class) == true -> stringResource(R.string.nav_accounts)
+        destination?.hasRoute(AboutRoute::class) == true -> stringResource(R.string.settings_about)
+        destination?.hasRoute(TransactionsRoute::class) == true -> stringResource(R.string.nav_all_transactions)
+        destination?.hasRoute(MergeDuplicatesRoute::class) == true -> stringResource(R.string.nav_merge)
+        destination?.hasRoute(GeneralSettingsRoute::class) == true -> stringResource(R.string.settings_general)
+        destination?.hasRoute(CryptoSettingsRoute::class) == true -> stringResource(R.string.class_crypto)
+        destination?.hasRoute(StockSettingsRoute::class) == true -> stringResource(R.string.class_stocks)
+        destination?.hasRoute(PortfolioSettingsRoute::class) == true -> stringResource(R.string.settings_portfolio)
+        destination?.hasRoute(PrivacySettingsRoute::class) == true -> stringResource(R.string.settings_privacy)
+        destination?.hasRoute(DataSettingsRoute::class) == true -> stringResource(R.string.settings_data)
+        else -> tabs.firstOrNull { destination?.hasRoute(it.routeClass) == true }?.label?.let { stringResource(it) } ?: "Eddies"
     }
 
     Box {
@@ -148,7 +150,7 @@ fun EddiesNavHost(
                         IconButton(onClick = { navController.navigate(TransactionsRoute) }) {
                             Icon(
                                 Icons.AutoMirrored.Filled.ReceiptLong,
-                                contentDescription = "All transactions",
+                                contentDescription = stringResource(R.string.nav_all_transactions),
                             )
                         }
                         // Where the FAB used to be. A tracker is read-mostly:
@@ -158,14 +160,14 @@ fun EddiesNavHost(
                         // still leads with a full-width button, which is where
                         // discovery actually matters.
                         IconButton(onClick = { navController.navigate(AddPositionSearchRoute) }) {
-                            Icon(Icons.Default.Add, contentDescription = "Add a position")
+                            Icon(Icons.Default.Add, contentDescription = stringResource(R.string.nav_add_position))
                         }
                     }
                 },
                 navigationIcon = {
                     if (!isTab) {
                         IconButton(onClick = { navController.popBackStack() }) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.action_back))
                         }
                     }
                 },
@@ -419,11 +421,11 @@ private fun FloatingNavPill(
                 colors = itemColors,
                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
             ) {
-                Icon(tab.icon, contentDescription = tab.label, modifier = Modifier.size(20.dp))
+                Icon(tab.icon, contentDescription = stringResource(tab.label), modifier = Modifier.size(20.dp))
                 AnimatedVisibility(visible = selected) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Spacer(Modifier.size(8.dp))
-                        Text(tab.label, style = MaterialTheme.typography.labelLarge, maxLines = 1)
+                        Text(stringResource(tab.label), style = MaterialTheme.typography.labelLarge, maxLines = 1)
                     }
                 }
             }

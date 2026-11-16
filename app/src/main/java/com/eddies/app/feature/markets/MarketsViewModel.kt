@@ -1,5 +1,6 @@
 package com.eddies.app.feature.markets
 
+import com.eddies.app.R
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.eddies.app.core.ui.IconResolver
@@ -27,16 +28,16 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import javax.inject.Inject
 
 /** Which universe the search box is pointed at. */
-enum class SearchScope(val label: String) {
-    COINS("Coins"),
-    STOCKS("Stocks"),
+enum class SearchScope {
+    COINS,
+    STOCKS,
 
     /**
      * Tradegate has no search endpoint and no ticker, only ISINs, so it gets its
      * own tab rather than being folded into the stock search where a name query
      * could never work.
      */
-    TRADEGATE("Tradegate"),
+    TRADEGATE,
 }
 
 data class MarketsUiState(
@@ -57,6 +58,7 @@ class MarketsViewModel @Inject constructor(
     private val assets: AssetRepository,
     private val prices: PriceRepository,
     private val settings: SettingsDataStore,
+    private val strings: com.eddies.app.core.ui.Strings,
     val icons: IconResolver,
 ) : ViewModel() {
 
@@ -129,19 +131,21 @@ class MarketsViewModel @Inject constructor(
         return when (val result = assets.lookupTradegate(raw)) {
             is TradegateLookup.Found -> {
                 tradegateStatus.value =
-                    "Listed on Tradegate at ${MoneyFormat.price(result.price, TradegateSource.CURRENCY)}."
+                    strings(R.string.markets_tradegate_listed, MoneyFormat.price(result.price, TradegateSource.CURRENCY))
                 listOf(result.asset)
             }
             is TradegateLookup.Invalid -> {
-                tradegateStatus.value = result.reason
+                tradegateStatus.value = strings(
+                    if (result.badCheckDigit) R.string.markets_isin_check_digit else R.string.markets_isin_invalid,
+                )
                 emptyList()
             }
             TradegateLookup.NotListed -> {
-                tradegateStatus.value = "That is a valid ISIN, but Tradegate does not list it."
+                tradegateStatus.value = strings(R.string.markets_tradegate_unlisted)
                 emptyList()
             }
             TradegateLookup.Unreachable -> {
-                tradegateStatus.value = "Could not reach Tradegate just now."
+                tradegateStatus.value = strings(R.string.markets_tradegate_unreachable)
                 emptyList()
             }
         }

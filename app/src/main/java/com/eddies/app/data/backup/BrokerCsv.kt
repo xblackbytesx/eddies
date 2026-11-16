@@ -17,6 +17,7 @@ enum class Broker(val label: String) {
     DEGIRO("DEGIRO"),
     KRAKEN("Kraken"),
     BITVAVO("Bitvavo"),
+    TRADE_REPUBLIC("Trade Republic"),
 }
 
 /**
@@ -39,6 +40,8 @@ data class BrokerRow(
     val feeCurrency: String? = null,
     val timestamp: Long,
     val externalId: String? = null,
+    /** Cash received, for a dividend. The quantity is zero on those rows. */
+    val cashAmount: BigDecimal? = null,
 ) {
     /** What the importer looks the instrument up by, and what it reports when it cannot. */
     val instrumentKey: String get() = isin ?: symbol.orEmpty()
@@ -74,10 +77,15 @@ object BrokerCsv {
     fun parse(csv: String, zone: ZoneId = ZoneId.systemDefault()): BrokerParse? {
         val lines = csv.removePrefix("\uFEFF").lineSequence().filter { it.isNotBlank() }.toList()
         if (lines.isEmpty()) return null
-        val header = CsvExchange.parseLine(lines.first()).map { it.trim().lowercase() }
+        // Every file here is comma separated, except that Trade Republic's also
+        // exists with semicolons. A header that barely splits on commas and
+        // splits well on semicolons is that variant.
+        val delimiter = if (CsvExchange.parseLine(lines.first()).size < 3 && ';' in lines.first()) ';' else ','
+        val header = CsvExchange.parseLine(lines.first(), delimiter).map { it.trim().lowercase() }
         val broker = detect(header) ?: return null
-        val body = lines.drop(1).map { CsvExchange.parseLine(it) }
+        val body = lines.drop(1).map { CsvExchange.parseLine(it, delimiter) }
         return when (broker) {
+            Broker.TRADE_REPUBLIC -> tradeRepublic(header, body)
             Broker.DEGIRO -> degiro(header, body, zone)
             Broker.KRAKEN -> kraken(header, body)
             Broker.BITVAVO -> bitvavo(header, body)
@@ -90,6 +98,7 @@ object BrokerCsv {
             "isin" in h && "order id" in h -> Broker.DEGIRO
             "txid" in h && "pair" in h && "vol" in h -> Broker.KRAKEN
             "quote currency" in h && "quote price" in h && "fee amount" in h -> Broker.BITVAVO
+            "transaction_id" in h && "account_type" in h && "category" in h && "shares" in h -> Broker.TRADE_REPUBLIC
             else -> null
         }
     }
@@ -306,6 +315,112 @@ object BrokerCsv {
         LocalDateTime.of(day, clock).atZone(zone).toInstant().toEpochMilli()
     }.getOrNull()
 
+    // ---- Trade Republic ---------------------------------------------------
+
+    /**
+     * Trade Republic's transaction export, the one the app offers under
+     * account statements since 2026.
+     *
+     * It is a statement of the whole account, so most rows are not holdings at
+     * all: card payments, deposits, interest, tax bookings. Those are passed
+     * over without comment. What is read is `TRADING` rows of type `BUY` or
+     * `SELL`, cash dividends, and coins received.
+     *
+     * Read the way Portfolio Performance's importer reads it: the side of a
+     * trade comes from `type`, never from a sign, and share counts and fees
+     * are taken as magnitudes. `symbol` is an ISIN, except for crypto, where it
+     * is a ticker. Times are UTC.
+     *
+     * A dividend is recorded as what arrived: the gross amount less the tax
+     * and fee columns. A negative dividend is Trade Republic correcting an
+     * earlier one, and is reported for the user to settle by hand.
+     */
+    private fun tradeRepublic(header: List<String>, body: List<List<String>>): BrokerParse {
+        val idx = header.withIndex().associate { (i, name) -> name to i }
+        val rows = ArrayList<BrokerRow>()
+        val errors = ArrayList<String>()
+        var skipped = 0
+        for ((n, cells) in body.withIndex()) {
+            fun cell(name: String): String? = idx[name]?.let { cells.getOrNull(it) }?.trim()?.takeIf { it.isNotEmpty() }
+            fun skip(reason: String) {
+                skipped++
+                if (errors.size < MAX_ERRORS) errors += "Row ${n + 2}: $reason"
+            }
+
+            val category = cell("category")?.uppercase()
+            val type = cell("type")?.uppercase()
+            val kind = when {
+                category == "TRADING" && type == "BUY" -> TxType.BUY
+                category == "TRADING" && type == "SELL" -> TxType.SELL
+                category == "TRADING" -> { skip("a $type trade is not something this reads."); continue }
+                category == "CASH" && type in TR_DIVIDENDS -> TxType.DIVIDEND
+                category == "DELIVERY" && type == "FREE_RECEIPT" -> TxType.TRANSFER_IN
+                else -> continue
+            }
+
+            val symbol = cell("symbol")?.uppercase()
+            val time = cell("datetime")?.let { runCatching { java.time.Instant.parse(it).toEpochMilli() }.getOrNull() }
+            if (symbol == null || time == null) {
+                // A dividend with no instrument is interest or a bonus by
+                // another name, and belongs with the cash rows.
+                if (kind == TxType.DIVIDEND && symbol == null) continue
+                skip("no instrument or no date.")
+                continue
+            }
+            val crypto = cell("asset_class")?.uppercase() == "CRYPTO"
+            val currency = cell("currency")?.uppercase() ?: "EUR"
+            val amount = cell("amount")?.let(::number)
+            val fee = cell("fee")?.let(::number)
+            val tax = cell("tax")?.let(::number)
+            val id = cell("transaction_id")?.let { "traderepublic:$it" }
+
+            if (kind == TxType.DIVIDEND) {
+                if (amount == null || amount.signum() <= 0) {
+                    skip("a dividend correction for $symbol, adjust it by hand.")
+                    continue
+                }
+                val received = amount + (fee ?: BigDecimal.ZERO) + (tax ?: BigDecimal.ZERO)
+                rows += BrokerRow(
+                    assetClass = if (crypto) AssetClass.CRYPTO else AssetClass.STOCK,
+                    type = TxType.DIVIDEND,
+                    isin = symbol.takeUnless { crypto },
+                    symbol = symbol.takeIf { crypto },
+                    name = cell("name"),
+                    quantity = BigDecimal.ZERO,
+                    currency = currency,
+                    timestamp = time,
+                    externalId = id,
+                    cashAmount = if (received.signum() > 0) received else amount,
+                )
+                continue
+            }
+
+            val shares = cell("shares")?.let(::number)?.abs()
+            if (shares == null || shares.signum() == 0) {
+                skip("no share count.")
+                continue
+            }
+            val price = cell("price")?.let(::number)?.abs()?.takeIf { it.signum() > 0 }
+                ?: amount?.abs()?.takeIf { it.signum() > 0 }?.divide(shares, com.eddies.app.domain.MC)
+            val paidFee = fee?.abs()?.takeIf { it.signum() > 0 }
+            rows += BrokerRow(
+                assetClass = if (crypto) AssetClass.CRYPTO else AssetClass.STOCK,
+                type = kind,
+                isin = symbol.takeUnless { crypto },
+                symbol = symbol.takeIf { crypto },
+                name = cell("name"),
+                quantity = shares,
+                pricePerUnit = price,
+                currency = currency,
+                fee = paidFee,
+                feeCurrency = paidFee?.let { currency },
+                timestamp = time,
+                externalId = id,
+            )
+        }
+        return BrokerParse(Broker.TRADE_REPUBLIC, rows, skipped, errors)
+    }
+
     // ---- shared ----------------------------------------------------------
 
     /**
@@ -342,6 +457,8 @@ object BrokerCsv {
     )
 
     private val KRAKEN_TIME: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
+
+    private val TR_DIVIDENDS = setOf("DIVIDEND", "DISTRIBUTION", "DIVIDEND_EQUIVALENT_PAYMENT")
 
     private val FIAT = setOf("EUR", "USD", "GBP", "CHF", "CAD", "AUD", "JPY")
 

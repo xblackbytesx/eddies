@@ -1,5 +1,7 @@
 package com.eddies.app.feature.settings
 
+import com.eddies.app.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -70,7 +72,7 @@ fun <T> ChoiceRow(
     title: String,
     options: List<T>,
     selected: T,
-    label: (T) -> String,
+    label: @Composable (T) -> String,
     onSelect: (T) -> Unit,
     modifier: Modifier = Modifier,
     subtitle: String? = null,
@@ -180,14 +182,14 @@ fun ApiKeyEditor(
         OutlinedTextField(
             value = draft,
             onValueChange = onDraftChange,
-            placeholder = { Text("Paste key") },
+            placeholder = { Text(stringResource(R.string.settings_key_paste)) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
         Spacer(Modifier.size(8.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = onSave, enabled = draft.isNotBlank()) { Text("Save") }
-            if (hasKey) TextButton(onClick = onClear) { Text("Remove") }
+            Button(onClick = onSave, enabled = draft.isNotBlank()) { Text(stringResource(R.string.action_save)) }
+            if (hasKey) TextButton(onClick = onClear) { Text(stringResource(R.string.action_remove)) }
         }
     }
 }

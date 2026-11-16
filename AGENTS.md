@@ -825,15 +825,19 @@ and a coin with no hourly source are carried, not dropped. The asset chart uses
 hourly candles for the same two ranges (`ChartRange.intraday`).
 
 **Broker files are recognized by header, never mapped by the user.**
-`BrokerCsv` reads DEGIRO, Kraken and Bitvavo exports and returns null for
+`BrokerCsv` reads DEGIRO, Trade Republic, Kraken and Bitvavo exports and returns null for
 anything else, which then goes to `CsvExchange`. Shares resolve by ISIN online
 (`AssetRepository.shareByIsin`), coins by ticker from the seed only
 (`coinBySymbol`). An instrument that cannot be identified is left out and named
 in the result, never filed under a guess. Cash movements and coin-to-coin trades
-are not imported. The three formats are written from each broker's documented
-layout and pinned by `BrokerCsvTest`; none has been checked against a real
-account's file. Trade Republic is not supported because its export layout is
-not known here: do not add it from memory.
+are not imported. DEGIRO, Kraken and Bitvavo are written from each broker's documented layout.
+Trade Republic follows Portfolio Performance's importer
+(`TradeRepublicCSVExtractor.java`) for the 23-column export introduced in April
+2026: side from `type`, magnitudes for shares and fees, `symbol` an ISIN except
+for crypto. All four are pinned by `BrokerCsvTest`; none has been checked
+against a real account's file, and the Trade Republic sign conventions in the
+tests come from a synthetic fixture, which is why the parser does not rely on
+them.
 
 **The widget says nothing the lock would hide.** `WidgetContent` masks amounts
 when balances are hidden or the app lock is on, and always shows when its
@@ -841,6 +845,25 @@ figure was true. `WidgetUpdater` never draws a total with a holding unpriced and
 keeps the last good lines when a refresh fails. The receiver only redraws stored
 text; the encrypted database is opened by `WidgetWorker`, which is scheduled
 only while a widget exists. It is RemoteViews on purpose, not Glance.
+
+**No user-facing text is written in Kotlin.** Every string is a resource in
+`res/values/strings.xml` with a Dutch counterpart in `res/values-nl/`. A
+composable uses `stringResource`, a view model takes `core/ui/Strings`, and a
+count uses a plural. Enum names for the UI are `labelRes` extensions in
+`core/ui/Labels.kt`, an exhaustive `when` each, so the domain stays free of
+Android and a new enum value does not compile until it is named.
+`TranslationsTest` fails when a translation is missing a key, has an extra one,
+or formats different arguments. Left in English on purpose: the license notice
+on the About screen, brand names, and per-row parser errors that are counted but
+not shown. The system picks the language; `generateLocaleConfig` lists them for
+Android 13's per-app setting from `res/resources.properties`.
+
+**minSdk is 35.** It was lowered to 26 for a day and put back at the owner's
+request: nothing below Android 15 is ever run on a device, and a finance app
+should not claim versions nobody tests. So there are no version guards and no
+`values-vNN` fallbacks. Lowering it again means adding them (wallpaper colors
+and the widget's system corner radius need 31) and never going below 26, the
+floor for `java.time` without desugaring.
 
 **No key ships in the APK, and one permission is declared.** `INTERNET`, plus
 network state and biometric. No storage permission: backups go through the
@@ -1034,13 +1057,15 @@ changelog.
     DEGIRO, Kraken and Bitvavo exports import as they are, and a net worth
     widget sits on the home screen. Unused code found by the audit was removed.
 
+14. **Reach.** Trade Republic in the broker import, and every string moved to
+    resources with a Dutch translation.
+
 **Parked.** Dividend reinvestment (DRIP), where a dividend buys shares rather
 than paying cash. It needs per-position settings and reconciliation against what
 the broker actually did, and the ledger already represents it as a DIVIDEND plus
 a BUY for anyone who wants it today.
 
-Also parked, in rough order of value: Trade Republic in the broker import (needs
-a real export to read the layout from), translations, and a per-year 1 January
+Also parked, in rough order of value: a per-year 1 January
 valuation, which several European wealth-tax regimes ask for and
 `PortfolioHistory` can already answer for any past day.
 
@@ -1049,7 +1074,7 @@ before they get built, not after.
 
 ## Verified without a device, 2026-11-16
 
-On the AGP 9 toolchain: `:app:testFullDebugUnitTest` (246 tests) passes, along
+On the AGP 9 toolchain: `:app:testFullDebugUnitTest` (255 tests) passes, along
 with `lintFullDebug` (0 errors), `assembleFullDebug`, `assembleDemoDebug` and
 `assembleFullRelease`, with no Kotlin compiler warnings. Release splits are
 roughly 13.6 MB (arm64-v8a), 12.5 MB (armeabi-v7a), 13.7 MB (x86_64) and 19.2 MB
@@ -1078,8 +1103,9 @@ restore into a populated ledger, a restore of a version 1 backup file, the
 database key path, and prices surviving a cold start now that they are written
 in batches. And all of milestone 13: the hourly chart against real hourly
 candles, a broker import of a real export file, and the widget on a launcher
-(placing it, the half-hourly refresh, masking with the lock on). Those need an
-install.
+(placing it, the half-hourly refresh, masking with the lock on). And milestone
+14: the app on any Android below 15, the Dutch text on a real screen (lengths,
+truncation, wording), and a real Trade Republic export. Those need an install.
 
 **Do not diagnose device-only behaviour from the code alone.** State the
 hypothesis, name the line of logcat that would confirm or kill it, and get that

@@ -1,5 +1,7 @@
 package com.eddies.app.feature.about
 
+import com.eddies.app.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -28,20 +30,20 @@ fun AboutScreen(modifier: Modifier = Modifier) {
         Spacer(Modifier.size(4.dp))
 
         Section("Eddies") {
-            InfoRow("Version", BuildConfig.VERSION_NAME)
+            InfoRow(stringResource(R.string.about_version), BuildConfig.VERSION_NAME)
             HorizontalDivider()
-            InfoRow("Package", BuildConfig.APPLICATION_ID)
+            InfoRow(stringResource(R.string.about_package), BuildConfig.APPLICATION_ID)
         }
 
-        Section("Privacy") {
+        Section(stringResource(R.string.about_privacy)) {
             Text(
-                text = PRIVACY,
+                text = stringResource(R.string.about_privacy_text),
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.padding(16.dp),
             )
         }
 
-        Section("Open source") {
+        Section(stringResource(R.string.about_open_source)) {
             Text(
                 text = LICENCES,
                 style = MaterialTheme.typography.bodySmall,
@@ -51,22 +53,6 @@ fun AboutScreen(modifier: Modifier = Modifier) {
         }
     }
 }
-
-private const val PRIVACY = """Eddies has no account and no server of its own. Your holdings are stored only on this device, in a database encrypted with a key held in the Android Keystore.
-
-There is no analytics, no crash reporting and no advertising. The app declares one permission: internet access.
-
-It talks to a handful of services, and only about prices:
-  - an exchange (Kraken or Binance) for live crypto prices
-  - CoinPaprika, or CoinGecko with your own key, for coins the exchange does not list
-  - Yahoo Finance, or Finnhub with your own key, for shares and ETFs
-  - Tradegate, for instruments held there
-  - Koios, if you add a Cardano stake address
-  - Frankfurter, for European Central Bank currency rates
-
-Those requests name the instruments you are pricing. That is unavoidable for a price, but it is why coin icons ship inside the app rather than being fetched, and why searching is offline unless you turn remote lookup on.
-
-Backups are encrypted with a passphrase you choose, and are written wherever you point them. Nothing is uploaded."""
 
 // GPLv3 section 5 wants a distributed work to carry its own notice, so Eddies
 // states its own licence here rather than only in the repository. The source URL

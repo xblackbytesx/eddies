@@ -1,5 +1,6 @@
 package com.eddies.app.feature.assetdetail
 
+import com.eddies.app.R
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -70,6 +71,7 @@ class AssetDetailViewModel @Inject constructor(
     private val staking: StakingRepository,
     private val icons: IconResolver,
     private val sourceRefs: com.eddies.app.data.db.dao.AssetSourceRefDao,
+    private val strings: com.eddies.app.core.ui.Strings,
     fx: com.eddies.app.data.price.FxRepository,
 ) : ViewModel() {
 
@@ -215,14 +217,14 @@ class AssetDetailViewModel @Inject constructor(
      */
     private fun stakingStatusFor(balances: List<StakingBalanceEntity>): String? {
         val row = balances.firstOrNull { it.assetId == assetId } ?: return null
-        row.error?.let { return "Could not refresh: $it" }
+        row.error?.let { return strings(R.string.staking_refresh_failed, it) }
         if (row.syncedAt == 0L) return null
         val ageMinutes = (System.currentTimeMillis() - row.syncedAt) / 60_000
         return when {
-            ageMinutes < 2 -> "Checked just now"
-            ageMinutes < 60 -> "Checked $ageMinutes minutes ago"
-            ageMinutes < 60 * 24 -> "Checked ${ageMinutes / 60} hours ago"
-            else -> "Checked ${ageMinutes / 1440} days ago"
+            ageMinutes < 2 -> strings(R.string.staking_checked_now)
+            ageMinutes < 60 -> strings.plural(R.plurals.staking_checked_minutes, ageMinutes.toInt())
+            ageMinutes < 60 * 24 -> strings.plural(R.plurals.staking_checked_hours, (ageMinutes / 60).toInt())
+            else -> strings.plural(R.plurals.staking_checked_days, (ageMinutes / 1440).toInt())
         }
     }
 }

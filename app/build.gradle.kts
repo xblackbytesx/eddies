@@ -105,6 +105,13 @@ android {
         targetCompatibility = JavaVersion.VERSION_21
     }
 
+    // Lists the app's languages for the system's per-app language setting
+    // (Android 13 and up), from the values-* folders that exist. The default
+    // language is named in res/resources.properties.
+    androidResources {
+        generateLocaleConfig = true
+    }
+
     buildFeatures {
         compose = true
         buildConfig = true

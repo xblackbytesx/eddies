@@ -1,5 +1,7 @@
 package com.eddies.app.feature.settings
 
+import com.eddies.app.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -26,23 +28,22 @@ fun StockSettingsScreen(
 
     SettingsPage(modifier, state.message) {
         Section(
-            title = "Where prices come from",
-            subtitle = "Set per holding, not here. This is what each one means.",
+            title = stringResource(R.string.settings_stock_sources),
+            subtitle = stringResource(R.string.settings_stock_sources_hint),
         ) {
-            InfoRow("Shares and ETFs", "Yahoo Finance")
+            InfoRow(stringResource(R.string.settings_shares_etfs), "Yahoo Finance")
             HorizontalDivider()
-            InfoRow("Added by ISIN", "Tradegate")
+            InfoRow(stringResource(R.string.settings_by_isin), "Tradegate")
         }
 
         Section(
-            title = "Official source",
-            subtitle = "Optional. Everything works without it.",
+            title = stringResource(R.string.settings_official),
+            subtitle = stringResource(R.string.settings_official_hint),
         ) {
             ApiKeyEditor(
-                title = "Finnhub API key",
-                savedNote = "A key is saved and encrypted on this device.",
-                unsavedNote = "Shares work without this. Add a Finnhub key only if you want an " +
-                    "official source instead of the default, which is unofficial and could change.",
+                title = stringResource(R.string.settings_finnhub_key),
+                savedNote = stringResource(R.string.settings_key_saved),
+                unsavedNote = stringResource(R.string.settings_finnhub_key_hint),
                 draft = state.stockKeyDraft,
                 hasKey = cfg.hasStockApiKey,
                 onDraftChange = viewModel::setStockKeyDraft,

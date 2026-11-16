@@ -73,6 +73,7 @@ class BrokerImporter @Inject constructor(
                 timestamp = row.timestamp,
                 source = TxSource.IMPORT_CSV,
                 externalId = row.externalId,
+                cashAmount = row.cashAmount,
             )
         }
 

@@ -1,5 +1,7 @@
 package com.eddies.app.feature.assetdetail
 
+import com.eddies.app.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -40,7 +42,7 @@ import com.eddies.app.core.ui.EmptyHint
 import com.eddies.app.core.ui.PnlText
 import com.eddies.app.core.ui.Section
 import com.eddies.app.core.ui.StaleBadge
-import com.eddies.app.data.repo.label
+import com.eddies.app.core.ui.labelRes
 import com.eddies.app.domain.MoneyFormat
 import com.eddies.app.domain.Transaction
 import java.math.BigDecimal
@@ -68,7 +70,7 @@ fun AssetDetailScreen(
         if (holding == null) {
             // A watched coin has no position, and Markets links straight here,
             // so this cannot be a dead end.
-            EmptyHint("No position in this coin yet. Add one with the + button on Portfolio.")
+            EmptyHint(stringResource(R.string.asset_no_position))
             return@Column
         }
 
@@ -81,7 +83,7 @@ fun AssetDetailScreen(
                     Text(
                         state.scrubbed?.let { MoneyFormat.price(BigDecimal.valueOf(it.value), state.currency) }
                             ?: holding.price?.let { MoneyFormat.price(it.price, state.currency) }
-                            ?: "No price",
+                            ?: stringResource(R.string.asset_no_price),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -94,7 +96,7 @@ fun AssetDetailScreen(
             IconButton(onClick = viewModel::toggleWatch) {
                 Icon(
                     imageVector = if (state.watched) Icons.Default.Star else Icons.Default.StarBorder,
-                    contentDescription = if (state.watched) "Stop watching" else "Watch this coin",
+                    contentDescription = stringResource(if (state.watched) R.string.asset_unwatch else R.string.asset_watch),
                     tint = if (state.watched) MaterialTheme.colorScheme.tertiary
                     else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -110,7 +112,7 @@ fun AssetDetailScreen(
                         style = MaterialTheme.typography.titleMedium,
                     )
                     Text(
-                        if (state.rangeChangePct != null) state.range.label else "24h",
+                        if (state.rangeChangePct != null) stringResource(state.range.labelRes) else stringResource(R.string.asset_24h),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -134,7 +136,7 @@ fun AssetDetailScreen(
             // prints, and the last point can differ from the price above.
             if (state.pricedByTradegate) {
                 Text(
-                    "Chart uses ${holding.asset.symbol} prices. Tradegate publishes no history.",
+                    stringResource(R.string.asset_tradegate_chart, holding.asset.symbol),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -147,7 +149,7 @@ fun AssetDetailScreen(
                     FilterChip(
                         selected = r == state.range,
                         onClick = { viewModel.setRange(r) },
-                        label = { Text(r.label, style = MaterialTheme.typography.labelMedium) },
+                        label = { Text(stringResource(r.labelRes), style = MaterialTheme.typography.labelMedium) },
                     )
                 }
             }
@@ -155,24 +157,24 @@ fun AssetDetailScreen(
             LinearProgressIndicator(Modifier.fillMaxWidth())
         }
 
-        Section("Your position") {
-            DetailRow("Holding", MoneyFormat.quantity(holding.position.quantity, holding.asset.decimals, state.hidden))
+        Section(stringResource(R.string.asset_position)) {
+            DetailRow(stringResource(R.string.asset_holding), MoneyFormat.quantity(holding.position.quantity, holding.asset.decimals, state.hidden))
             HorizontalDivider()
-            DetailRow("Value", MoneyFormat.fiat(holding.marketValue, state.currency, state.hidden))
+            DetailRow(stringResource(R.string.asset_value), MoneyFormat.fiat(holding.marketValue, state.currency, state.hidden))
             HorizontalDivider()
             DetailRow(
-                "Unrealised",
+                stringResource(R.string.asset_unrealised),
                 MoneyFormat.signedFiat(holding.unrealizedPnl, state.currency, state.hidden),
                 pnl = holding.unrealizedPnl,
             )
             if (state.advanced) {
                 HorizontalDivider()
-                DetailRow("Cost basis", MoneyFormat.fiat(holding.position.costBasis, state.currency, state.hidden))
+                DetailRow(stringResource(R.string.settings_cost_basis), MoneyFormat.fiat(holding.position.costBasis, state.currency, state.hidden))
                 HorizontalDivider()
-                DetailRow("Average cost", MoneyFormat.price(holding.position.averageUnitCost, state.currency, state.hidden))
+                DetailRow(stringResource(R.string.asset_average_cost), MoneyFormat.price(holding.position.averageUnitCost, state.currency, state.hidden))
                 HorizontalDivider()
                 DetailRow(
-                    "Realised",
+                    stringResource(R.string.portfolio_realised),
                     MoneyFormat.signedFiat(holding.position.realizedPnl, state.currency, state.hidden),
                     pnl = holding.position.realizedPnl,
                 )
@@ -183,7 +185,7 @@ fun AssetDetailScreen(
         // empty row is the prompt to fill it in; a row that only appears once
         // filled is a feature nobody discovers.
         Section(
-            title = "Stored at",
+            title = stringResource(R.string.custody_stored_at),
             subtitle = state.custody?.note,
         ) {
             Row(
@@ -206,20 +208,20 @@ fun AssetDetailScreen(
                     Column(Modifier.weight(1f)) {
                         Text(custody.label, style = MaterialTheme.typography.bodyLarge)
                         Text(
-                            custody.type.label,
+                            stringResource(custody.type.labelRes),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                    Text("Change", style = MaterialTheme.typography.labelMedium)
+                    Text(stringResource(R.string.asset_change), style = MaterialTheme.typography.labelMedium)
                 } else {
                     Text(
-                        "Not recorded. Tap to say where you keep it.",
+                        stringResource(R.string.asset_custody_none),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.weight(1f),
                     )
-                    Text("Set", style = MaterialTheme.typography.labelMedium)
+                    Text(stringResource(R.string.asset_set), style = MaterialTheme.typography.labelMedium)
                 }
             }
         }
@@ -228,29 +230,29 @@ fun AssetDetailScreen(
         // never carries an empty section explaining that it has none.
         if (holding.stakingQuantityTotal.signum() > 0) {
             Section(
-                title = "Staking",
-                subtitle = "Earned on top of what you bought, valued at today's price.",
+                title = stringResource(R.string.asset_staking),
+                subtitle = stringResource(R.string.asset_staking_hint),
             ) {
                 if (holding.hasPendingStaking) {
                     DetailRow(
-                        "Accruing on chain",
+                        stringResource(R.string.asset_accruing),
                         MoneyFormat.quantity(holding.stakingPending, holding.asset.decimals, state.hidden),
                     )
                     HorizontalDivider()
                 }
                 if (holding.position.stakingQuantity.signum() > 0) {
                     DetailRow(
-                        "Recorded rewards",
+                        stringResource(R.string.asset_recorded_rewards),
                         MoneyFormat.quantity(
                             holding.position.stakingQuantity, holding.asset.decimals, state.hidden,
                         ),
                     )
                     HorizontalDivider()
                 }
-                DetailRow("Worth today", MoneyFormat.fiat(holding.stakingValue, state.currency, state.hidden))
+                DetailRow(stringResource(R.string.asset_worth_today), MoneyFormat.fiat(holding.stakingValue, state.currency, state.hidden))
                 HorizontalDivider()
                 DetailRow(
-                    "Bought",
+                    stringResource(R.string.asset_bought),
                     MoneyFormat.quantity(holding.position.quantity, holding.asset.decimals, state.hidden),
                 )
                 HorizontalDivider()
@@ -271,8 +273,8 @@ fun AssetDetailScreen(
         }
 
         Section(
-            title = "Transactions",
-            subtitle = "${state.transactions.size} recorded",
+            title = stringResource(R.string.asset_transactions),
+            subtitle = stringResource(R.string.asset_tx_count, state.transactions.size),
             // Adding another trade in something already held should not mean
             // going back to search and finding it again.
             action = {
@@ -283,12 +285,12 @@ fun AssetDetailScreen(
                         modifier = Modifier.size(18.dp),
                     )
                     Spacer(Modifier.size(4.dp))
-                    Text("Add")
+                    Text(stringResource(R.string.action_add))
                 }
             },
         ) {
             if (state.transactions.isEmpty()) {
-                EmptyHint("Nothing recorded yet.")
+                EmptyHint(stringResource(R.string.tx_none))
             } else {
                 state.transactions.forEachIndexed { i, tx ->
                     if (i > 0) HorizontalDivider()
@@ -350,7 +352,7 @@ private fun StakingBar(principal: Double, staked: Double) {
         )
         Spacer(Modifier.size(4.dp))
         Text(
-            "${MoneyFormat.percent(fraction * 100.0).removePrefix("+")} of this holding came from staking",
+            stringResource(R.string.asset_staking_share, MoneyFormat.percent(fraction * 100.0).removePrefix("+")),
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -367,7 +369,7 @@ private fun TransactionRow(tx: Transaction, decimals: Int, hidden: Boolean, onCl
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
-            Text(tx.type.label, style = MaterialTheme.typography.bodyMedium)
+            Text(stringResource(tx.type.labelRes), style = MaterialTheme.typography.bodyMedium)
             Text(
                 txDateFormat.format(Instant.ofEpochMilli(tx.timestamp).atZone(ZoneId.systemDefault())),
                 style = MaterialTheme.typography.labelSmall,

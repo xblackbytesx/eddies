@@ -1,5 +1,8 @@
 package com.eddies.app.feature.insights
 
+import com.eddies.app.R
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -58,7 +61,7 @@ fun InsightsScreen(
     }
 
     if (state.summary.holdings.isEmpty()) {
-        EmptyHint("Add a position to see how your portfolio breaks down.")
+        EmptyHint(stringResource(R.string.insights_empty))
         return
     }
 
@@ -73,8 +76,8 @@ fun InsightsScreen(
         // a section restating the number directly above it.
         if (state.perClass.size > 1) {
             Section(
-                title = "Crypto and stocks",
-                subtitle = "Every class, side by side.",
+                title = stringResource(R.string.insights_classes),
+                subtitle = stringResource(R.string.insights_classes_hint),
             ) {
                 state.perClass.forEachIndexed { i, totals ->
                     if (i > 0) HorizontalDivider()
@@ -84,14 +87,25 @@ fun InsightsScreen(
                     ) {
                         Column(Modifier.weight(1f)) {
                             Text(
-                                totals.assetClass.name.lowercase().replaceFirstChar(Char::uppercase),
+                                stringResource(
+                                    when (totals.assetClass) {
+                                        com.eddies.app.domain.AssetClass.CRYPTO -> R.string.class_crypto
+                                        com.eddies.app.domain.AssetClass.STOCK -> R.string.class_stocks
+                                        com.eddies.app.domain.AssetClass.CASH -> R.string.class_cash
+                                    },
+                                ),
                                 style = MaterialTheme.typography.bodyLarge,
                             )
                             Text(
-                                "${totals.holdings} holding${if (totals.holdings == 1) "" else "s"}" +
-                                    if (totals.income.signum() > 0)
-                                        ", ${MoneyFormat.fiat(totals.income, currency, state.hidden)} earned"
-                                    else "",
+                                pluralStringResource(R.plurals.insights_holdings, totals.holdings, totals.holdings) +
+                                    if (totals.income.signum() > 0) {
+                                        ", " + stringResource(
+                                            R.string.insights_earned,
+                                            MoneyFormat.fiat(totals.income, currency, state.hidden),
+                                        )
+                                    } else {
+                                        ""
+                                    },
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -116,7 +130,7 @@ fun InsightsScreen(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        "Combined",
+                        stringResource(R.string.insights_combined),
                         style = MaterialTheme.typography.bodyLarge,
                         modifier = Modifier.weight(1f),
                     )
@@ -128,7 +142,7 @@ fun InsightsScreen(
             }
         }
 
-        Section("Allocation") {
+        Section(stringResource(R.string.insights_allocation)) {
             Box(
                 modifier = Modifier.fillMaxWidth().height(200.dp).padding(16.dp),
                 contentAlignment = Alignment.Center,
@@ -144,7 +158,7 @@ fun InsightsScreen(
                         style = MaterialTheme.typography.titleLarge,
                     )
                     Text(
-                        "${state.allocation.size} assets",
+                        pluralStringResource(R.plurals.insights_assets, state.allocation.size, state.allocation.size),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -180,13 +194,13 @@ fun InsightsScreen(
             }
         }
 
-        Section("Profit and loss") {
-            SummaryRow("Unrealised", MoneyFormat.signedFiat(state.summary.totalUnrealizedPnl, currency, state.hidden), state.summary.totalUnrealizedPnl)
+        Section(stringResource(R.string.insights_pnl)) {
+            SummaryRow(stringResource(R.string.asset_unrealised), MoneyFormat.signedFiat(state.summary.totalUnrealizedPnl, currency, state.hidden), state.summary.totalUnrealizedPnl)
             HorizontalDivider()
-            SummaryRow("Realised", MoneyFormat.signedFiat(state.summary.totalRealizedPnl, currency, state.hidden), state.summary.totalRealizedPnl)
+            SummaryRow(stringResource(R.string.portfolio_realised), MoneyFormat.signedFiat(state.summary.totalRealizedPnl, currency, state.hidden), state.summary.totalRealizedPnl)
             HorizontalDivider()
             SummaryRow(
-                "Total",
+                stringResource(R.string.insights_total),
                 MoneyFormat.signedFiat(
                     state.summary.totalUnrealizedPnl + state.summary.totalRealizedPnl, currency, state.hidden,
                 ),
@@ -195,7 +209,7 @@ fun InsightsScreen(
             if (state.summary.totalStakingValue.signum() > 0) {
                 HorizontalDivider()
                 SummaryRow(
-                    "Of which staking rewards",
+                    stringResource(R.string.insights_staking),
                     MoneyFormat.fiat(state.summary.totalStakingValue, currency, state.hidden),
                     null,
                 )
@@ -206,8 +220,8 @@ fun InsightsScreen(
         // how much sits in each place.
         if (state.custodyGroups.isNotEmpty()) {
             Section(
-                title = "Where it is kept",
-                subtitle = "Set this per coin on its detail screen.",
+                title = stringResource(R.string.insights_custody),
+                subtitle = stringResource(R.string.insights_custody_hint),
             ) {
                 state.custodyGroups.forEachIndexed { i, group ->
                     if (i > 0) HorizontalDivider()
@@ -224,7 +238,10 @@ fun InsightsScreen(
                         )
                         Spacer(Modifier.size(12.dp))
                         Column(Modifier.weight(1f)) {
-                            Text(group.label, style = MaterialTheme.typography.bodyLarge)
+                            Text(
+                                if (unrecorded) stringResource(R.string.insights_unrecorded) else group.label,
+                                style = MaterialTheme.typography.bodyLarge,
+                            )
                             Text(
                                 group.holdings.joinToString(", ") { it.asset.symbol },
                                 style = MaterialTheme.typography.bodySmall,
@@ -244,7 +261,7 @@ fun InsightsScreen(
         }
 
         if (state.movers.size >= 2) {
-            Section("Movers", subtitle = "Last 24 hours") {
+            Section(stringResource(R.string.insights_movers), subtitle = stringResource(R.string.insights_movers_hint)) {
                 state.movers.take(3).forEachIndexed { i, holding ->
                     if (i > 0) HorizontalDivider()
                     MoverRow(holding, viewModel.icons.uriFor(holding.asset.iconSlug), state.hidden)

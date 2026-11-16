@@ -1,5 +1,7 @@
 package com.eddies.app.feature.settings
 
+import com.eddies.app.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
@@ -27,24 +29,24 @@ fun DataSettingsScreen(
     var confirmErase by remember { mutableStateOf(false) }
 
     SettingsPage(modifier, state.message) {
-        Section("Your ledger") {
+        Section(stringResource(R.string.settings_ledger)) {
             NavRow(
-                title = "Transaction history",
-                subtitle = "Every buy, sell, dividend and reward, across all assets.",
+                title = stringResource(R.string.settings_history),
+                subtitle = stringResource(R.string.settings_history_hint),
                 onClick = onOpenTransactions,
             )
             HorizontalDivider()
             NavRow(
-                title = "Backup and restore",
-                subtitle = "Encrypted portfolio file, or a plain CSV.",
+                title = stringResource(R.string.settings_backup),
+                subtitle = stringResource(R.string.settings_backup_hint),
                 onClick = onOpenBackup,
             )
         }
 
-        Section("Repair") {
+        Section(stringResource(R.string.settings_repair)) {
             NavRow(
-                title = "Merge duplicate holdings",
-                subtitle = "One instrument showing as two entries. Nothing moves until you confirm.",
+                title = stringResource(R.string.settings_merge),
+                subtitle = stringResource(R.string.settings_merge_hint),
                 onClick = onOpenMergeDuplicates,
             )
         }
@@ -52,12 +54,12 @@ fun DataSettingsScreen(
         // Its own card, at the bottom, away from anything routine. A destructive
         // action sitting in a list of navigation rows is one mis-tap.
         Section(
-            title = "Danger zone",
-            subtitle = "There is no undo and no copy anywhere else.",
+            title = stringResource(R.string.settings_danger),
+            subtitle = stringResource(R.string.settings_danger_hint),
         ) {
             NavRow(
-                title = "Delete all transactions",
-                subtitle = "Export a backup first.",
+                title = stringResource(R.string.settings_delete_all),
+                subtitle = stringResource(R.string.settings_delete_all_hint),
                 onClick = { confirmErase = true },
             )
         }
@@ -66,15 +68,15 @@ fun DataSettingsScreen(
     if (confirmErase) {
         AlertDialog(
             onDismissRequest = { confirmErase = false },
-            title = { Text("Delete every transaction?") },
-            text = { Text("Your whole ledger is removed from this device. There is no undo, and no copy anywhere else.") },
+            title = { Text(stringResource(R.string.settings_delete_all_title)) },
+            text = { Text(stringResource(R.string.settings_delete_all_body)) },
             confirmButton = {
                 TextButton(onClick = {
                     viewModel.eraseEverything()
                     confirmErase = false
-                }) { Text("Delete") }
+                }) { Text(stringResource(R.string.action_delete)) }
             },
-            dismissButton = { TextButton(onClick = { confirmErase = false }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { confirmErase = false }) { Text(stringResource(R.string.action_cancel)) } },
         )
     }
 }

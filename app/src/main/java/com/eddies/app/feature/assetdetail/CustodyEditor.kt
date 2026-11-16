@@ -1,5 +1,7 @@
 package com.eddies.app.feature.assetdetail
 
+import com.eddies.app.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -29,6 +31,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
+import com.eddies.app.core.ui.labelRes
 import com.eddies.app.data.db.entity.CustodyType
 
 /** An icon per kind, so a location is recognisable at a glance in a list. */
@@ -69,16 +72,16 @@ fun CustodyDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Stored at") },
+        title = { Text(stringResource(R.string.custody_stored_at)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("Kind", style = androidx.compose.material3.MaterialTheme.typography.labelMedium)
+                Text(stringResource(R.string.custody_kind), style = androidx.compose.material3.MaterialTheme.typography.labelMedium)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     CustodyType.entries.forEach { option ->
                         FilterChip(
                             selected = option == type,
                             onClick = { type = option },
-                            label = { Text(option.label) },
+                            label = { Text(stringResource(option.labelRes)) },
                         )
                     }
                 }
@@ -86,7 +89,7 @@ fun CustodyDialog(
                 OutlinedTextField(
                     value = label,
                     onValueChange = { label = it },
-                    label = { Text("Name") },
+                    label = { Text(stringResource(R.string.accounts_name)) },
                     placeholder = { Text(placeholderFor(type)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
@@ -95,7 +98,7 @@ fun CustodyDialog(
                 val unused = suggestions.filter { !it.equals(label, ignoreCase = true) }
                 if (unused.isNotEmpty()) {
                     Text(
-                        "Used elsewhere",
+                        stringResource(R.string.custody_used_elsewhere),
                         style = androidx.compose.material3.MaterialTheme.typography.labelSmall,
                     )
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -108,8 +111,8 @@ fun CustodyDialog(
                 OutlinedTextField(
                     value = note,
                     onValueChange = { note = it },
-                    label = { Text("Note (optional)") },
-                    placeholder = { Text("Which drawer, which seed backup, a split") },
+                    label = { Text(stringResource(R.string.custody_note)) },
+                    placeholder = { Text(stringResource(R.string.custody_note_hint)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -120,23 +123,24 @@ fun CustodyDialog(
             TextButton(
                 onClick = { onSave(type, label, note) },
                 enabled = label.isNotBlank(),
-            ) { Text("Save") }
+            ) { Text(stringResource(R.string.action_save)) }
         },
         dismissButton = {
             if (hadValue) {
-                TextButton(onClick = onClear) { Text("Remove") }
+                TextButton(onClick = onClear) { Text(stringResource(R.string.action_remove)) }
             } else {
-                TextButton(onClick = onDismiss) { Text("Cancel") }
+                TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
             }
         },
     )
 }
 
+@Composable
 private fun placeholderFor(type: CustodyType): String = when (type) {
     CustodyType.HARDWARE_WALLET -> "Ledger Nano X"
     CustodyType.EXCHANGE -> "Kraken"
     CustodyType.SOFTWARE_WALLET -> "Sparrow"
-    CustodyType.COLD_STORAGE -> "Paper backup, safe"
+    CustodyType.COLD_STORAGE -> stringResource(R.string.custody_ph_cold)
     CustodyType.DEFI -> "Lido"
-    CustodyType.OTHER -> "Where is it"
+    CustodyType.OTHER -> stringResource(R.string.custody_ph_other)
 }

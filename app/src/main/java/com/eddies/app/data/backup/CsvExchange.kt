@@ -132,7 +132,7 @@ object CsvExchange {
     }.getOrNull()
 
     /** Minimal RFC 4180: quoted fields, doubled quotes inside them. */
-    internal fun parseLine(line: String): List<String> {
+    internal fun parseLine(line: String, delimiter: Char = ','): List<String> {
         val out = ArrayList<String>()
         val sb = StringBuilder()
         var inQuotes = false
@@ -144,7 +144,7 @@ object CsvExchange {
                     sb.append('"'); i++
                 }
                 c == '"' -> inQuotes = !inQuotes
-                c == ',' && !inQuotes -> { out += sb.toString(); sb.clear() }
+                c == delimiter && !inQuotes -> { out += sb.toString(); sb.clear() }
                 else -> sb.append(c)
             }
             i++

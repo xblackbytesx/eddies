@@ -1,5 +1,8 @@
 package com.eddies.app.feature.merge
 
+import com.eddies.app.R
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -62,7 +65,7 @@ fun MergeDuplicatesScreen(
         }
 
         if (!state.scanning && state.duplicates.isEmpty()) {
-            Section("Nothing to merge") {
+            Section(stringResource(R.string.merge_nothing)) {
                 Row(
                     Modifier.fillMaxWidth().padding(16.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -70,7 +73,7 @@ fun MergeDuplicatesScreen(
                     Icon(Icons.Default.CheckCircle, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                     Spacer(Modifier.size(12.dp))
                     Text(
-                        "Every holding appears once. Nothing was changed.",
+                        stringResource(R.string.merge_nothing_body),
                         style = MaterialTheme.typography.bodyMedium,
                     )
                 }
@@ -85,31 +88,31 @@ fun MergeDuplicatesScreen(
     state.confirming?.let { preview ->
         AlertDialog(
             onDismissRequest = viewModel::dismiss,
-            title = { Text("Merge ${preview.group.keep.symbol}?") },
+            title = { Text(stringResource(R.string.merge_title, preview.group.keep.symbol)) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
-                        "${preview.totalTransactions} " +
-                            (if (preview.totalTransactions == 1) "transaction moves" else "transactions move") +
-                            " onto ${preview.group.keep.id}, and " +
-                            (if (preview.group.merge.size == 1) "the other entry is" else "the other entries are") +
-                            " removed.",
+                        pluralStringResource(
+                            R.plurals.merge_moves_onto,
+                            preview.totalTransactions,
+                            preview.totalTransactions,
+                            preview.group.keep.id,
+                        ) + " " + pluralStringResource(R.plurals.merge_entries_removed, preview.group.merge.size),
                     )
                     Text(
-                        "Nothing is deleted from your ledger. Cached prices for the " +
-                            "removed entries are cleared and fetched again.",
+                        stringResource(R.string.merge_note_ledger),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Text(
-                        "There is no undo. Export a backup first if you want one.",
+                        stringResource(R.string.merge_note_undo),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             },
-            confirmButton = { TextButton(onClick = viewModel::confirm) { Text("Merge") } },
-            dismissButton = { TextButton(onClick = viewModel::dismiss) { Text("Cancel") } },
+            confirmButton = { TextButton(onClick = viewModel::confirm) { Text(stringResource(R.string.merge_confirm)) } },
+            dismissButton = { TextButton(onClick = viewModel::dismiss) { Text(stringResource(R.string.action_cancel)) } },
         )
     }
 }
@@ -119,7 +122,7 @@ private fun DuplicateCard(preview: MergePreview, onMerge: () -> Unit) {
     val group = preview.group
     Section(
         title = "${group.keep.symbol}  ${group.keep.name}",
-        subtitle = "${group.all.size} entries for what looks like one holding.",
+        subtitle = pluralStringResource(R.plurals.merge_group_hint, group.all.size, group.all.size),
     ) {
         AssetRow(group.keep, count = null, keep = true, isin = preview.isins[group.keep.id])
         for (asset in group.merge) {
@@ -134,18 +137,17 @@ private fun DuplicateCard(preview: MergePreview, onMerge: () -> Unit) {
         HorizontalDivider()
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(
-                buildString {
-                    append(preview.totalTransactions)
-                    append(if (preview.totalTransactions == 1) " transaction moves" else " transactions move")
-                    if (preview.custodyMoves > 0) append(", plus where it is stored")
-                    if (preview.splitMoves > 0) append(", plus ${preview.splitMoves} split events")
-                    append(".")
-                },
+                listOfNotNull(
+                    pluralStringResource(R.plurals.merge_moves, preview.totalTransactions, preview.totalTransactions),
+                    stringResource(R.string.merge_plus_custody).takeIf { preview.custodyMoves > 0 },
+                    pluralStringResource(R.plurals.merge_plus_splits, preview.splitMoves, preview.splitMoves)
+                        .takeIf { preview.splitMoves > 0 },
+                ).joinToString(" "),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Button(onClick = onMerge, modifier = Modifier.fillMaxWidth()) {
-                Text("Merge into ${group.keep.symbol}")
+                Text(stringResource(R.string.merge_into, group.keep.symbol))
             }
         }
     }
@@ -159,7 +161,7 @@ private fun AssetRow(asset: Asset, count: Int?, keep: Boolean, isin: String?) {
     ) {
         Column(Modifier.weight(1f)) {
             Text(
-                if (keep) "Kept" else "Merged away",
+                stringResource(if (keep) R.string.merge_kept else R.string.merge_away),
                 style = MaterialTheme.typography.labelMedium,
                 color = if (keep) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
             )

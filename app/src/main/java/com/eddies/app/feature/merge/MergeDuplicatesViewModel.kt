@@ -1,5 +1,6 @@
 package com.eddies.app.feature.merge
 
+import com.eddies.app.R
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.eddies.app.data.repo.AssetMergeRepository
@@ -23,6 +24,7 @@ data class MergeUiState(
 @HiltViewModel
 class MergeDuplicatesViewModel @Inject constructor(
     private val repo: AssetMergeRepository,
+    private val strings: com.eddies.app.core.ui.Strings,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(MergeUiState())
@@ -50,8 +52,8 @@ class MergeDuplicatesViewModel @Inject constructor(
             _state.update {
                 it.copy(
                     busy = false,
-                    message = "Merged into ${preview.group.keep.symbol}. " +
-                        "$moved ${if (moved == 1) "transaction" else "transactions"} moved.",
+                    message = strings(R.string.merge_done, preview.group.keep.symbol) + " " +
+                        strings.plural(R.plurals.merge_moved, moved),
                 )
             }
             // Rescanning rather than removing the row locally: the merge may
